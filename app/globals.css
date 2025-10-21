@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --ln-bg: #fbf7ef;
+    --ln-line: rgba(0, 0, 0, 0.06);
+  }
+  
+  body {
+    background: 
+      repeating-linear-gradient(
+        to bottom,
+        var(--ln-bg) 0px,
+        var(--ln-bg) 35px,
+        var(--ln-line) 36px,
+        var(--ln-bg) 37px
+      );
+    background-attachment: fixed;
+    color: #111827;
+  }
+}
