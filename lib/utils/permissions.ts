@@ -37,7 +37,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 // 메뉴 설명
 export const MENU_LABELS = {
-  menu_dashboard: '대시보드',
+  menu_dashboard: '일정',
   menu_attendance: '출석 관리',
   menu_members: '회원 관리',
   menu_classes: '수업 관리',
