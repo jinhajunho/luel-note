@@ -33,7 +33,7 @@ export default function Header({ currentPage }: { currentPage: string }) {
   // 역할별 메뉴 필터링
   const getMenuItems = () => {
     const allMenuItems = [
-      { href: '/dashboard', label: '대시보드' },
+      { href: '/dashboard', label: '일정정' },
       { href: '/attendance', label: '출석' },
       { href: '/members', label: '회원', roles: ['admin', 'instructor'] },
       { href: '/sessions', label: '수업', roles: ['admin', 'instructor'] },
