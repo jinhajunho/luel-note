@@ -520,3 +520,174 @@ TO authenticated
 USING (true);
 
 
+-- =====================================================
+-- Luel Note 프로젝트 DB 업데이트
+-- 1. instructor_members 테이블 생성 (강사-회원 다대다 관계)
+-- 2. payment_types 데이터 업데이트 (유료 → 세션)
+-- =====================================================
+
+-- 1. 강사-회원 연결 테이블 생성
+CREATE TABLE IF NOT EXISTS instructor_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  instructor_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  member_id TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(instructor_id, member_id)
+);
+
+-- instructor_members 인덱스 생성
+CREATE INDEX IF NOT EXISTS idx_instructor_members_instructor 
+ON instructor_members(instructor_id);
+
+CREATE INDEX IF NOT EXISTS idx_instructor_members_member 
+ON instructor_members(member_id);
+
+-- instructor_members RLS 정책
+ALTER TABLE instructor_members ENABLE ROW LEVEL SECURITY;
+
+-- 관리자는 모두 볼 수 있음
+CREATE POLICY "Admin can view all instructor_members"
+ON instructor_members FOR SELECT
+TO public
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.auth_id = auth.uid()
+    AND profiles.role = 'admin'
+  )
+);
+
+-- 강사는 자신과 연결된 회원 관계 볼 수 있음
+CREATE POLICY "Instructor can view own instructor_members"
+ON instructor_members FOR SELECT
+TO public
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.auth_id = auth.uid()
+    AND profiles.phone = instructor_members.instructor_id
+  )
+);
+
+-- 회원은 자신과 연결된 강사 관계 볼 수 있음
+CREATE POLICY "Member can view own instructor_members"
+ON instructor_members FOR SELECT
+TO public
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.auth_id = auth.uid()
+    AND profiles.phone = instructor_members.member_id
+  )
+);
+
+-- 회원은 자신의 담당 강사를 추가/수정/삭제 가능
+CREATE POLICY "Member can manage own instructors"
+ON instructor_members FOR ALL
+TO public
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.auth_id = auth.uid()
+    AND profiles.phone = instructor_members.member_id
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.auth_id = auth.uid()
+    AND profiles.phone = instructor_members.member_id
+  )
+);
+
+-- 관리자는 모든 관계 관리 가능
+CREATE POLICY "Admin can manage all instructor_members"
+ON instructor_members FOR ALL
+TO public
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.auth_id = auth.uid()
+    AND profiles.role = 'admin'
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.auth_id = auth.uid()
+    AND profiles.role = 'admin'
+  )
+);
+
+-- 2. payment_types 데이터 업데이트 (유료 → 세션)
+UPDATE payment_types 
+SET name = '세션' 
+WHERE name = '유료';
+
+-- 3. 헬퍼 함수: 강사의 담당 회원 목록 조회
+CREATE OR REPLACE FUNCTION get_instructor_members(instructor_phone TEXT)
+RETURNS TABLE (
+  id TEXT,
+  name TEXT,
+  is_guest BOOLEAN,
+  status TEXT,
+  join_date DATE,
+  total_remaining INTEGER
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    m.id,
+    m.name,
+    m.is_guest,
+    m.status,
+    m.join_date,
+    COALESCE(SUM(mp.total_count - mp.used_count), 0)::INTEGER as total_remaining
+  FROM members m
+  INNER JOIN instructor_members im ON m.id = im.member_id
+  LEFT JOIN member_passes mp ON m.id = mp.member_id
+  WHERE im.instructor_id = instructor_phone
+  GROUP BY m.id, m.name, m.is_guest, m.status, m.join_date
+  ORDER BY m.created_at DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. 헬퍼 함수: 회원의 담당 강사 목록 조회
+CREATE OR REPLACE FUNCTION get_member_instructors(member_phone TEXT)
+RETURNS TABLE (
+  id TEXT,
+  name TEXT,
+  role TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.phone as id,
+    p.name,
+    p.role
+  FROM profiles p
+  INNER JOIN instructor_members im ON p.phone = im.instructor_id
+  WHERE im.member_id = member_phone
+  AND p.role IN ('instructor', 'admin')
+  ORDER BY p.name;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5. 헬퍼 함수: 회원의 잔여 회원권 체크
+CREATE OR REPLACE FUNCTION check_member_has_passes(member_phone TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE
+  total_remaining INTEGER;
+BEGIN
+  SELECT COALESCE(SUM(mp.total_count - mp.used_count), 0)
+  INTO total_remaining
+  FROM member_passes mp
+  WHERE mp.member_id = member_phone;
+  
+  RETURN total_remaining > 0;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 완료!
+-- 이 SQL을 Supabase SQL Editor에서 실행하세요.
