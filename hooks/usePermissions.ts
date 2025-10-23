@@ -1,4 +1,5 @@
 import { useAuth } from '@/lib/auth-context';
+import { useState, useEffect } from 'react';
 
 export type MenuKey = 
   | 'dashboard'
@@ -10,18 +11,63 @@ export type MenuKey =
 
 export function usePermissions() {
   const { profile, permissions } = useAuth();
+  const [hasMemberPass, setHasMemberPass] = useState<boolean>(true);
+  const [checkingPass, setCheckingPass] = useState<boolean>(false);
 
   // 역할 체크
   const isAdmin = profile?.role === 'admin';
   const isInstructor = profile?.role === 'instructor';
   const isMember = profile?.role === 'member';
 
+  // 회원의 경우 회원권 체크
+  useEffect(() => {
+    if (isMember && profile?.phone) {
+      checkMemberPass();
+    }
+  }, [isMember, profile?.phone]);
+
+  const checkMemberPass = async () => {
+    if (!profile?.phone) return;
+
+    setCheckingPass(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/check_member_has_passes`,
+        {
+          method: 'POST',
+          headers: {
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ member_phone: profile.phone })
+        }
+      );
+      const hasPass = await response.json();
+      setHasMemberPass(hasPass === true);
+    } catch (error) {
+      console.error('회원권 체크 오류:', error);
+      setHasMemberPass(false);
+    } finally {
+      setCheckingPass(false);
+    }
+  };
+
   // 메뉴 접근 권한 체크
   const canAccessMenu = (menuKey: MenuKey): boolean => {
     if (!profile || !permissions) return false;
 
+    // 회원이고 회원권이 없으면 모든 메뉴 접근 불가
+    if (isMember && !hasMemberPass) {
+      return false;
+    }
+
     // admin은 항상 모든 메뉴 접근 가능
     if (isAdmin) return true;
+
+    // 회원은 회원관리, 수업 메뉴 접근 불가
+    if (isMember && (menuKey === 'members' || menuKey === 'classes')) {
+      return false;
+    }
 
     // 메뉴별 권한 체크
     const permissionKey = `menu_${menuKey}` as keyof typeof permissions;
@@ -66,6 +112,8 @@ export function usePermissions() {
     isAdmin,
     isInstructor,
     isMember,
+    hasMemberPass,
+    checkingPass,
     canAccessMenu,
     can,
   };
