@@ -10,7 +10,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="min-h-screen">
-      <Header currentPage="대시보드" />
+      <Header currentPage="일정" />
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {children}
