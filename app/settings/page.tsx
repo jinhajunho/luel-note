@@ -5,6 +5,11 @@ import { useAuth } from '@/lib/auth-context'
 import { createClient } from '@/lib/supabase/client'
 import ProtectedRoute from '@/components/ProtectedRoute'
 
+type Instructor = {
+  phone: string
+  name: string
+}
+
 export default function SettingsPage() {
   return (
     <ProtectedRoute requireMenu="settings">
@@ -24,18 +29,63 @@ function SettingsContent() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // 강사 관련 상태
+  const [allInstructors, setAllInstructors] = useState<Instructor[]>([])
+  const [selectedInstructors, setSelectedInstructors] = useState<string[]>([])
+  const [loadingInstructors, setLoadingInstructors] = useState(false)
+
+  const isMember = profile?.role === 'member'
+
   useEffect(() => {
     if (profile) {
       setName(profile.name || '')
       setBirthDate(profile.birth_date || '')
-      // gender 타입 체크
       if (profile.gender === 'male' || profile.gender === 'female') {
         setGender(profile.gender)
       } else {
         setGender('')
       }
     }
-  }, [profile])
+
+    // 회원인 경우 강사 목록 로드
+    if (isMember) {
+      loadInstructors()
+      loadMyInstructors()
+    }
+  }, [profile, isMember])
+
+  // 전체 강사 목록 로드
+  const loadInstructors = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('phone, name')
+        .in('role', ['instructor', 'admin'])
+        .order('name')
+
+      if (error) throw error
+      setAllInstructors(data || [])
+    } catch (error) {
+      console.error('강사 목록 로드 오류:', error)
+    }
+  }
+
+  // 내 담당 강사 로드
+  const loadMyInstructors = async () => {
+    if (!profile?.phone) return
+
+    try {
+      const { data, error } = await supabase
+        .from('instructor_members')
+        .select('instructor_id')
+        .eq('member_id', profile.phone)
+
+      if (error) throw error
+      setSelectedInstructors(data?.map(d => d.instructor_id) || [])
+    } catch (error) {
+      console.error('담당 강사 로드 오류:', error)
+    }
+  }
 
   const handleUpdateProfile = async () => {
     if (!profile) return
@@ -95,6 +145,54 @@ function SettingsContent() {
       alert('비밀번호 변경에 실패했습니다.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 담당 강사 토글
+  const handleToggleInstructor = (instructorPhone: string) => {
+    setSelectedInstructors(prev => {
+      if (prev.includes(instructorPhone)) {
+        return prev.filter(p => p !== instructorPhone)
+      } else {
+        return [...prev, instructorPhone]
+      }
+    })
+  }
+
+  // 담당 강사 저장
+  const handleSaveInstructors = async () => {
+    if (!profile?.phone) return
+
+    setLoadingInstructors(true)
+    try {
+      // 1. 기존 관계 모두 삭제
+      const { error: deleteError } = await supabase
+        .from('instructor_members')
+        .delete()
+        .eq('member_id', profile.phone)
+
+      if (deleteError) throw deleteError
+
+      // 2. 새로운 관계 추가
+      if (selectedInstructors.length > 0) {
+        const insertData = selectedInstructors.map(instructorPhone => ({
+          instructor_id: instructorPhone,
+          member_id: profile.phone
+        }))
+
+        const { error: insertError } = await supabase
+          .from('instructor_members')
+          .insert(insertData)
+
+        if (insertError) throw insertError
+      }
+
+      alert('담당 강사가 저장되었습니다!')
+    } catch (error) {
+      console.error('담당 강사 저장 오류:', error)
+      alert('담당 강사 저장에 실패했습니다.')
+    } finally {
+      setLoadingInstructors(false)
     }
   }
 
@@ -221,6 +319,47 @@ function SettingsContent() {
           </button>
         </div>
       </div>
+
+      {/* 담당 강사 선택 (회원만) */}
+      {isMember && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">담당 강사</h3>
+          <p className="text-sm text-gray-500 mb-6">
+            수업을 진행할 강사를 선택하세요 (여러 명 가능)
+          </p>
+
+          <div className="space-y-3 mb-4">
+            {allInstructors.length === 0 ? (
+              <p className="text-sm text-gray-500">등록된 강사가 없습니다.</p>
+            ) : (
+              allInstructors.map((instructor) => (
+                <label
+                  key={instructor.phone}
+                  className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedInstructors.includes(instructor.phone)}
+                    onChange={() => handleToggleInstructor(instructor.phone)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-900">
+                    {instructor.name}
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+
+          <button
+            onClick={handleSaveInstructors}
+            disabled={loadingInstructors}
+            className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            {loadingInstructors ? '저장 중...' : '담당 강사 저장'}
+          </button>
+        </div>
+      )}
 
       {/* 비밀번호 변경 */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
