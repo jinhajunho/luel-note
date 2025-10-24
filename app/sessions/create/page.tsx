@@ -20,7 +20,6 @@ export default function SessionCreatePage() {
   const [date, setDate] = useState(formatDate(new Date()))
   const [time, setTime] = useState('10:00')
   const [instructor, setInstructor] = useState('')
-  const [room, setRoom] = useState('A룸')
   const [selectedMembers, setSelectedMembers] = useState<string[]>([])
   const [isGuest, setIsGuest] = useState(false)
   const [guestName, setGuestName] = useState('')
@@ -105,7 +104,6 @@ export default function SessionCreatePage() {
       date,
       time,
       instructor,
-      room,
       selectedMembers,
       memo
     })
@@ -187,42 +185,22 @@ export default function SessionCreatePage() {
           </div>
         </div>
 
-        {/* 강사 & 룸 */}
+        {/* 강사 선택 */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2">
-                강사 *
-              </label>
-              <select
-                value={instructor}
-                onChange={(e) => setInstructor(e.target.value)}
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">선택하세요</option>
-                {instructors.map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2">
-                장소 *
-              </label>
-              <select
-                value={room}
-                onChange={(e) => setRoom(e.target.value)}
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="A룸">A룸</option>
-                <option value="B룸">B룸</option>
-                <option value="C룸">C룸</option>
-              </select>
-            </div>
-          </div>
+          <label className="block text-sm font-bold text-gray-900 mb-2">
+            강사 *
+          </label>
+          <select
+            value={instructor}
+            onChange={(e) => setInstructor(e.target.value)}
+            required
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">선택하세요</option>
+            {instructors.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
 
         {/* 회원 선택 */}
@@ -236,79 +214,63 @@ export default function SessionCreatePage() {
               onClick={() => setIsGuest(!isGuest)}
               className="text-sm text-blue-600 font-medium hover:text-blue-700"
             >
-              {isGuest ? '회원 목록 보기' : '+ 게스트 추가'}
+              {isGuest ? '회원 목록으로' : '게스트 추가'}
             </button>
           </div>
 
-          {/* 게스트 추가 폼 */}
-          {isGuest && (
-            <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    이름
-                  </label>
-                  <input
-                    type="text"
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    placeholder="게스트 이름"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    전화번호
-                  </label>
-                  <input
-                    type="tel"
-                    value={guestPhone}
-                    onChange={(e) => setGuestPhone(e.target.value)}
-                    placeholder="010-1234-5678"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={addGuest}
-                  className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  게스트 추가
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 회원 목록 */}
-          {!isGuest && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-80 overflow-y-auto">
+          {!isGuest ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto">
               {members.map(member => (
-                <label
+                <button
                   key={member.id}
+                  type="button"
+                  onClick={() => toggleMember(member.id)}
                   className={`
-                    flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all
+                    p-4 text-left rounded-lg border-2 transition-all
                     ${selectedMembers.includes(member.id)
-                      ? 'bg-blue-50 border-blue-300'
-                      : 'bg-white border-gray-200 hover:border-blue-200'
+                      ? 'bg-blue-50 border-blue-500'
+                      : 'bg-white border-gray-200 hover:border-blue-300'
                     }
                   `}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedMembers.includes(member.id)}
-                    onChange={() => toggleMember(member.id)}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900">
-                      {member.name}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {member.phone}
-                    </div>
-                  </div>
-                </label>
+                  <div className="font-bold text-gray-900">{member.name}</div>
+                  <div className="text-sm text-gray-500">{member.phone}</div>
+                </button>
               ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  게스트 이름
+                </label>
+                <input
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="이름 입력"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  게스트 전화번호
+                </label>
+                <input
+                  type="tel"
+                  value={guestPhone}
+                  onChange={(e) => setGuestPhone(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="010-0000-0000"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={addGuest}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors"
+              >
+                게스트 추가
+              </button>
             </div>
           )}
         </div>
@@ -322,23 +284,23 @@ export default function SessionCreatePage() {
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
             rows={3}
-            placeholder="수업에 대한 추가 정보를 입력하세요"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            placeholder="추가 메모사항을 입력하세요"
           />
         </div>
 
-        {/* 액션 버튼 */}
+        {/* 버튼 */}
         <div className="flex gap-3">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex-1 px-6 py-4 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200 transition-colors"
+            className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-bold hover:bg-gray-50 transition-colors"
           >
             취소
           </button>
           <button
             type="submit"
-            className="flex-1 px-6 py-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors"
           >
             수업 생성
           </button>
