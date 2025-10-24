@@ -10,7 +10,6 @@ type Session = {
   id: string
   time: string
   type: '인트로' | '개인수업' | '듀엣수업' | '그룹수업'
-  room: string
   instructor?: string
   members: Array<{
     name: string
@@ -221,7 +220,6 @@ function InstructorSessionList({ selectedDate, sessions }: { selectedDate: Date,
           sessions.map((session) => {
             const attendedCount = session.members.filter(m => m.attended).length
             const totalCount = session.members.length
-            const isFull = attendedCount >= totalCount
 
             return (
               <div 
@@ -233,35 +231,33 @@ function InstructorSessionList({ selectedDate, sessions }: { selectedDate: Date,
                     <div className="text-lg font-bold text-gray-900">
                       {session.time}
                     </div>
-                    <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-200">
+                    <span className={`
+                      px-3 py-1 rounded-full text-sm font-bold
+                      ${session.type === '인트로' && 'bg-blue-100 text-blue-700'}
+                      ${session.type === '개인수업' && 'bg-green-100 text-green-700'}
+                      ${session.type === '듀엣수업' && 'bg-purple-100 text-purple-700'}
+                      ${session.type === '그룹수업' && 'bg-orange-100 text-orange-700'}
+                    `}>
                       {session.type}
                     </span>
-                    <span className="px-2 py-1 bg-gray-50 text-gray-600 text-xs rounded">
-                      {session.room}
-                    </span>
                   </div>
-                  <div className={`
-                    px-3 py-1 text-xs font-bold rounded-full
-                    ${isFull 
-                      ? 'bg-green-50 text-green-700 border border-green-200' 
-                      : 'bg-gray-50 text-gray-600 border border-gray-200'
-                    }
-                  `}>
+                  <div className="px-3 py-1 text-xs font-bold rounded-full bg-gray-50 text-gray-600 border border-gray-200">
                     {attendedCount}/{totalCount}
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 mb-4">
                   {session.members.map((member, idx) => (
-                    <div 
-                      key={idx}
-                      className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
-                    >
-                      <span className="text-sm text-gray-700">
-                        {member.name}
-                      </span>
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`
+                          w-2 h-2 rounded-full
+                          ${member.attended ? 'bg-green-500' : 'bg-gray-300'}
+                        `} />
+                        <span className="font-medium text-gray-900">{member.name}</span>
+                      </div>
                       <span className={`
-                        px-2 py-1 text-xs font-bold rounded-full
+                        px-2 py-1 text-xs font-bold rounded border
                         ${member.attended 
                           ? 'bg-green-50 text-green-700' 
                           : 'bg-red-50 text-red-700'
@@ -373,7 +369,6 @@ function DashboardContent() {
         id: '0',
         time: '오전 09:00',
         type: '인트로',
-        room: 'A룸',
         instructor: '김코치',
         members: [
           { name: '김지은', attended: false },
@@ -384,7 +379,6 @@ function DashboardContent() {
         id: '1',
         time: '오전 10:00',
         type: '개인수업',
-        room: 'A룸',
         instructor: '이코치',
         members: [{ name: '홍길동', attended: true }]
       },
@@ -392,7 +386,6 @@ function DashboardContent() {
         id: '2',
         time: '오후 02:00',
         type: '듀엣수업',
-        room: 'B룸',
         instructor: '박코치',
         members: [
           { name: '박민정', attended: true },
@@ -403,7 +396,6 @@ function DashboardContent() {
         id: '3',
         time: '오후 05:00',
         type: '그룹수업',
-        room: 'C룸',
         instructor: '최코치',
         members: [
           { name: '박지훈', attended: true },
