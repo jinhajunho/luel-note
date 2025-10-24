@@ -9,7 +9,6 @@ type SessionRecord = {
   time: string
   type: '인트로' | '개인수업' | '듀엣수업' | '그룹수업'
   instructor: string
-  room: string
   members: Array<{
     id: string
     name: string
@@ -60,7 +59,6 @@ export default function AttendanceHistoryPage() {
         time: '오전 10:00',
         type: '개인수업',
         instructor: '김코치',
-        room: 'A룸',
         members: [
           { id: '1', name: '홍길동', attended: true, memo: '' }
         ]
@@ -71,7 +69,6 @@ export default function AttendanceHistoryPage() {
         time: '오후 02:00',
         type: '듀엣수업',
         instructor: '이코치',
-        room: 'B룸',
         members: [
           { id: '2', name: '박민정', attended: true, memo: '잘했음' },
           { id: '3', name: '이현우', attended: false, memo: '개인 사정' }
@@ -83,7 +80,6 @@ export default function AttendanceHistoryPage() {
         time: '오전 09:00',
         type: '인트로',
         instructor: '박코치',
-        room: 'C룸',
         members: [
           { id: '4', name: '김지은', attended: true, memo: '' },
           { id: '5', name: '박상훈', attended: true, memo: '' }
@@ -95,7 +91,6 @@ export default function AttendanceHistoryPage() {
         time: '오후 05:00',
         type: '그룹수업',
         instructor: '최코치',
-        room: 'A룸',
         members: [
           { id: '6', name: '박지훈', attended: true, memo: '' },
           { id: '7', name: '서지현', attended: true, memo: '' },
@@ -109,7 +104,6 @@ export default function AttendanceHistoryPage() {
         time: '오후 03:00',
         type: '개인수업',
         instructor: '김코치',
-        room: 'B룸',
         members: [
           { id: '10', name: '정수민', attended: true, memo: '진도 빠름' }
         ]
@@ -169,188 +163,151 @@ export default function AttendanceHistoryPage() {
   }
 
   const sortedSessions = [...sessions].sort((a, b) => {
-    if (sortOrder === 'recent') {
-      return new Date(b.date + ' ' + b.time).getTime() - new Date(a.date + ' ' + a.time).getTime()
-    } else {
-      return new Date(a.date + ' ' + a.time).getTime() - new Date(b.date + ' ' + b.time).getTime()
-    }
+    const dateA = new Date(`${a.date} ${a.time}`)
+    const dateB = new Date(`${b.date} ${b.time}`)
+    return sortOrder === 'recent' 
+      ? dateB.getTime() - dateA.getTime()
+      : dateA.getTime() - dateB.getTime()
   })
 
   return (
     <div className="space-y-6">
       {/* 페이지 제목 */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">출석 히스토리</h2>
+        <h2 className="text-2xl font-bold text-gray-900">출석 기록</h2>
         <p className="text-sm text-gray-500 mt-1">
-          수업별 출석 기록 조회 및 수정
+          수업별 출석 현황을 확인하고 관리하세요
         </p>
       </div>
 
-      {/* 날짜 필터 */}
+      {/* 검색 필터 */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              시작일
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <label className="block text-sm font-bold text-gray-900 mb-2">
+              시작 날짜
             </label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              종료일
+          <div className="flex-1">
+            <label className="block text-sm font-bold text-gray-900 mb-2">
+              종료 날짜
             </label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-
-          <button
-            onClick={handleSearch}
-            className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            조회
-          </button>
+          <div className="flex items-end">
+            <button
+              onClick={handleSearch}
+              className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors"
+            >
+              조회
+            </button>
+          </div>
         </div>
       </div>
 
       {/* 통계 */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">총 수업</div>
+          <div className="text-sm text-gray-500 mb-1">전체</div>
           <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">인트로</div>
-          <div className="text-2xl font-bold text-purple-600">{stats.intro}</div>
+          <div className="text-sm text-gray-500 mb-1">인트로</div>
+          <div className="text-2xl font-bold text-blue-600">{stats.intro}</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">개인수업</div>
-          <div className="text-2xl font-bold text-blue-600">{stats.personal}</div>
+          <div className="text-sm text-gray-500 mb-1">개인수업</div>
+          <div className="text-2xl font-bold text-green-600">{stats.personal}</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">듀엣수업</div>
-          <div className="text-2xl font-bold text-green-600">{stats.duet}</div>
+          <div className="text-sm text-gray-500 mb-1">듀엣수업</div>
+          <div className="text-2xl font-bold text-purple-600">{stats.duet}</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-xs text-gray-500 mb-1">그룹수업</div>
+          <div className="text-sm text-gray-500 mb-1">그룹수업</div>
           <div className="text-2xl font-bold text-orange-600">{stats.group}</div>
         </div>
       </div>
 
-      {/* 정렬 */}
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-bold text-gray-900">
-          수업 기록 ({sessions.length}건)
-        </h3>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSortOrder('recent')}
-            className={`
-              px-3 py-1 text-sm font-medium rounded-lg transition-colors
-              ${sortOrder === 'recent'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }
-            `}
-          >
-            최근순
-          </button>
-          <button
-            onClick={() => setSortOrder('oldest')}
-            className={`
-              px-3 py-1 text-sm font-medium rounded-lg transition-colors
-              ${sortOrder === 'oldest'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }
-            `}
-          >
-            오래된순
-          </button>
-        </div>
+      {/* 정렬 버튼 */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setSortOrder(sortOrder === 'recent' ? 'oldest' : 'recent')}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          {sortOrder === 'recent' ? '최신순' : '오래된순'}
+        </button>
       </div>
 
-      {/* 수업 카드 목록 */}
+      {/* 수업 목록 */}
       <div className="space-y-4">
-        {sortedSessions.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
-            조회된 수업이 없습니다
-          </div>
-        ) : (
-          sortedSessions.map((session) => (
-            <div 
-              key={session.id}
-              className="bg-white rounded-xl border border-gray-200 p-6"
-            >
-              {/* 수업 헤더 */}
-              <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="text-lg font-bold text-gray-900">
-                    {session.date} {session.time}
-                  </div>
-                  <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-200">
-                    {session.type}
-                  </span>
-                </div>
-                <div className="text-sm text-gray-600">
-                  {session.instructor} · {session.room}
-                </div>
+        {sortedSessions.map(session => (
+          <div key={session.id} className="bg-white rounded-xl border border-gray-200 p-6">
+            {/* 수업 헤더 */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <span className={`
+                  px-3 py-1 rounded-full text-sm font-bold
+                  ${session.type === '인트로' && 'bg-blue-100 text-blue-700'}
+                  ${session.type === '개인수업' && 'bg-green-100 text-green-700'}
+                  ${session.type === '듀엣수업' && 'bg-purple-100 text-purple-700'}
+                  ${session.type === '그룹수업' && 'bg-orange-100 text-orange-700'}
+                `}>
+                  {session.type}
+                </span>
+                <span className="text-sm text-gray-500">{session.date}</span>
+                <span className="text-sm text-gray-500">{session.time}</span>
+                <span className="text-sm font-medium text-gray-700">{session.instructor}</span>
               </div>
+            </div>
 
-              {/* 회원 출석 */}
-              <div className="space-y-3">
-                {session.members.map((member) => (
-                  <div 
-                    key={member.id}
-                    className="flex items-start gap-4 p-3 bg-gray-50 rounded-lg"
-                  >
-                    {/* 출석 체크박스 */}
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={member.attended}
-                        onChange={() => handleAttendanceToggle(session.id, member.id)}
-                        className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                      <span className="text-sm font-medium text-gray-900">
-                        {member.name}
-                      </span>
-                    </label>
-
-                    {/* 상태 뱃지 */}
-                    <span className={`
-                      px-2 py-1 text-xs font-bold rounded-full
+            {/* 회원 목록 */}
+            <div className="space-y-3">
+              {session.members.map(member => (
+                <div key={member.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+                  <button
+                    onClick={() => handleAttendanceToggle(session.id, member.id)}
+                    className={`
+                      flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-all
                       ${member.attended
-                        ? 'bg-green-50 text-green-700'
-                        : 'bg-red-50 text-red-700'
+                        ? 'bg-green-500 border-green-500'
+                        : 'bg-white border-gray-300 hover:border-green-500'
                       }
-                    `}>
-                      {member.attended ? '출석' : '결석'}
-                    </span>
+                    `}
+                  >
+                    {member.attended && (
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
 
-                    {/* 메모 입력 */}
+                  <div className="flex-1">
+                    <div className="font-bold text-gray-900 mb-2">{member.name}</div>
                     <input
                       type="text"
                       value={member.memo}
                       onChange={(e) => handleMemoChange(session.id, member.id, e.target.value)}
-                      placeholder="메모 (선택)"
-                      className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="메모 입력..."
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ))
-        )}
+          </div>
+        ))}
       </div>
     </div>
   )
