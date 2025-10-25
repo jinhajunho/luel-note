@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import Header from '@/components/layout/Header'
+import Header from '@/components/common/Header'
 
 export default function DashboardLayout({ 
   children 
