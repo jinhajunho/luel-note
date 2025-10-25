@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import Header from '@/components/layout/Header'
+import Header from '@/components/common/Header'
 
 export default function SessionsLayout({ 
   children 
@@ -14,7 +14,7 @@ export default function SessionsLayout({
 
   return (
     <div className="min-h-screen">
-      <Header currentPage="수업" />
+      <Header currentPage="레슨" />
 
       {/* 서브 네비게이션 */}
       <div className="bg-gray-50 border-b border-gray-200">
@@ -30,7 +30,7 @@ export default function SessionsLayout({
                 }
               `}
             >
-              수업 목록
+              레슨 목록
             </Link>
             <Link 
               href="/sessions/create"
@@ -42,7 +42,7 @@ export default function SessionsLayout({
                 }
               `}
             >
-              수업 등록
+              레슨 등록
             </Link>
           </div>
         </div>
