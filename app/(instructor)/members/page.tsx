@@ -1,6 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { 
+  getMemberPasses, 
+  createMembershipPackage, 
+  deleteMembershipPackage,
+  getPaymentTypes 
+} from '@/app/actions/membership'
 
 // ==================== 타입 정의 ====================
 type MemberStatus = 'active' | 'inactive' | 'pending'
@@ -21,16 +27,17 @@ interface Member {
 
 interface MembershipPackage {
   id: string
-  memberId: string
-  paymentTypeId: string
-  paymentTypeName: string
-  paymentTypeColor: string
-  totalLessons: number
-  remainingLessons: number
-  usedLessons: number
-  startDate: string
-  endDate: string
+  member_id: string
+  payment_type_id: string
+  payment_type_name: string
+  payment_type_color: string
+  total_lessons: number
+  remaining_lessons: number
+  used_lessons: number
+  start_date: string
+  end_date: string | null
   status: PassStatus
+  created_at: string
 }
 
 interface PaymentType {
@@ -49,6 +56,7 @@ export default function InstructorMembersPage() {
   const [memberPasses, setMemberPasses] = useState<MembershipPackage[]>([])
   const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingPasses, setLoadingPasses] = useState(false)
   
   // 회원권 추가 폼
   const [showAddPassForm, setShowAddPassForm] = useState(false)
@@ -90,7 +98,7 @@ export default function InstructorMembersPage() {
   // 회원 데이터 로드
   useEffect(() => {
     loadMembers()
-    loadPaymentTypes()
+    loadPaymentTypesData()
   }, [])
 
   // 탭 & 검색 필터
@@ -110,8 +118,7 @@ export default function InstructorMembersPage() {
       filtered = filtered.filter(
         (m) =>
           m.name.toLowerCase().includes(query) ||
-          m.phone.includes(query) ||
-          m.instructor?.toLowerCase().includes(query)
+          m.phone.includes(query)
       )
     }
 
@@ -121,7 +128,7 @@ export default function InstructorMembersPage() {
   // 회원 선택 시 회원권 로드
   useEffect(() => {
     if (selectedMember) {
-      loadMemberPasses(selectedMember.id)
+      loadMemberPassesData(selectedMember.phone)
     }
   }, [selectedMember])
 
@@ -129,22 +136,7 @@ export default function InstructorMembersPage() {
     setLoading(true)
     try {
       // TODO: Supabase에서 담당 회원만 조회 (RLS 자동 필터링)
-      // const { data, error } = await supabase
-      //   .from('members')
-      //   .select(`
-      //     *,
-      //     instructor:instructor_members(
-      //       instructor:profiles!instructor_members_instructor_id_fkey(name)
-      //     ),
-      //     membership_packages(
-      //       total_lessons,
-      //       remaining_lessons,
-      //       status
-      //     )
-      //   `)
-      //   .order('join_date', { ascending: false })
-
-      // 임시 목 데이터 (실제로는 RLS가 자동으로 담당 회원만 필터링)
+      // 현재는 목 데이터 사용
       const mockData: Member[] = [
         {
           id: '1',
@@ -167,94 +159,37 @@ export default function InstructorMembersPage() {
           remainingLessons: 7,
           totalLessons: 20,
         },
-        {
-          id: '4',
-          name: '박민지',
-          phone: '010-6666-7777',
-          status: 'active',
-          joinDate: '2025-01-10',
-          instructor: '김민지',
-          remainingLessons: 14,
-          totalLessons: 30,
-        },
       ]
 
       setMembers(mockData)
       setFilteredMembers(mockData)
     } catch (error) {
       console.error('회원 로드 실패:', error)
+      alert('회원 목록을 불러오는데 실패했습니다')
     } finally {
       setLoading(false)
     }
   }
 
-  const loadPaymentTypes = async () => {
+  const loadPaymentTypesData = async () => {
     try {
-      // TODO: Supabase에서 결제 타입 조회
-      // const { data, error } = await supabase
-      //   .from('payment_types')
-      //   .select('*')
-      //   .order('id')
-
-      // 임시 목 데이터
-      const mockTypes: PaymentType[] = [
-        { id: '1', name: '체험수업', color: '#f59e0b' },
-        { id: '2', name: '정규수업', color: '#3b82f6' },
-        { id: '3', name: '강사제공', color: '#10b981' },
-        { id: '4', name: '센터제공', color: '#fbbf24' },
-      ]
-
-      setPaymentTypes(mockTypes)
+      const types = await getPaymentTypes()
+      setPaymentTypes(types)
     } catch (error) {
       console.error('결제 타입 로드 실패:', error)
     }
   }
 
-  const loadMemberPasses = async (memberId: string) => {
+  const loadMemberPassesData = async (memberId: string) => {
+    setLoadingPasses(true)
     try {
-      // TODO: Supabase에서 회원권 조회
-      // const { data, error } = await supabase
-      //   .from('membership_packages')
-      //   .select(`
-      //     *,
-      //     payment_type:payment_types(name, color)
-      //   `)
-      //   .eq('member_id', memberId)
-      //   .order('created_at', { ascending: false })
-
-      // 임시 목 데이터
-      const mockPasses: MembershipPackage[] = [
-        {
-          id: 'pass-1',
-          memberId: memberId,
-          paymentTypeId: '2',
-          paymentTypeName: '정규수업',
-          paymentTypeColor: '#3b82f6',
-          totalLessons: 30,
-          remainingLessons: 25,
-          usedLessons: 5,
-          startDate: '2025-01-01',
-          endDate: '2025-06-30',
-          status: 'active'
-        },
-        {
-          id: 'pass-2',
-          memberId: memberId,
-          paymentTypeId: '3',
-          paymentTypeName: '강사제공',
-          paymentTypeColor: '#10b981',
-          totalLessons: 5,
-          remainingLessons: 3,
-          usedLessons: 2,
-          startDate: '2025-01-15',
-          endDate: '2025-03-15',
-          status: 'active'
-        }
-      ]
-
-      setMemberPasses(mockPasses)
+      const passes = await getMemberPasses(memberId)
+      setMemberPasses(passes)
     } catch (error) {
-      console.error('회원권 로드 실패:', error)
+      console.error('회원권 조회 실패:', error)
+      alert('회원권을 불러오는데 실패했습니다')
+    } finally {
+      setLoadingPasses(false)
     }
   }
 
@@ -268,35 +203,34 @@ export default function InstructorMembersPage() {
   const handleAddPass = async () => {
     if (!selectedMember) return
     
-    if (!newPass.paymentTypeId || !newPass.totalLessons) {
+    if (!newPass.paymentTypeId || !newPass.totalLessons || !newPass.endDate) {
       alert('모든 필드를 입력해주세요')
       return
     }
 
     try {
-      // TODO: Supabase에 회원권 등록
-      // const { data, error } = await supabase
-      //   .from('membership_packages')
-      //   .insert({
-      //     member_id: selectedMember.id,
-      //     payment_type_id: newPass.paymentTypeId,
-      //     total_lessons: parseInt(newPass.totalLessons),
-      //     remaining_lessons: parseInt(newPass.totalLessons),
-      //     used_lessons: 0,
-      //     start_date: newPass.startDate,
-      //     end_date: newPass.endDate,
-      //     status: 'active'
-      //   })
-
-      alert('회원권이 등록되었습니다')
-      setShowAddPassForm(false)
-      setNewPass({
-        paymentTypeId: '',
-        totalLessons: '',
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: ''
+      const result = await createMembershipPackage({
+        member_id: selectedMember.phone,
+        payment_type_id: newPass.paymentTypeId,
+        total_lessons: parseInt(newPass.totalLessons),
+        start_date: newPass.startDate,
+        end_date: newPass.endDate
       })
-      loadMemberPasses(selectedMember.id)
+
+      if (result.success) {
+        alert('회원권이 등록되었습니다')
+        setShowAddPassForm(false)
+        setNewPass({
+          paymentTypeId: '',
+          totalLessons: '',
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: ''
+        })
+        // 회원권 목록 새로고침
+        await loadMemberPassesData(selectedMember.phone)
+      } else {
+        alert(result.error || '회원권 등록에 실패했습니다')
+      }
     } catch (error) {
       console.error('회원권 등록 실패:', error)
       alert('회원권 등록에 실패했습니다')
@@ -308,15 +242,16 @@ export default function InstructorMembersPage() {
     if (!confirm('이 회원권을 삭제하시겠습니까?')) return
 
     try {
-      // TODO: Supabase에서 회원권 삭제
-      // const { error } = await supabase
-      //   .from('membership_packages')
-      //   .delete()
-      //   .eq('id', passId)
-
-      alert('회원권이 삭제되었습니다')
-      if (selectedMember) {
-        loadMemberPasses(selectedMember.id)
+      const result = await deleteMembershipPackage(passId)
+      
+      if (result.success) {
+        alert('회원권이 삭제되었습니다')
+        // 회원권 목록 새로고침
+        if (selectedMember) {
+          await loadMemberPassesData(selectedMember.phone)
+        }
+      } else {
+        alert(result.error || '회원권 삭제에 실패했습니다')
       }
     } catch (error) {
       console.error('회원권 삭제 실패:', error)
@@ -598,7 +533,11 @@ export default function InstructorMembersPage() {
 
                   {/* 회원권 목록 */}
                   <div className="space-y-3">
-                    {memberPasses.length === 0 ? (
+                    {loadingPasses ? (
+                      <div className="text-center py-8 text-gray-500 text-sm">
+                        로딩 중...
+                      </div>
+                    ) : memberPasses.length === 0 ? (
                       <div className="text-center py-8 text-gray-500 text-sm">
                         보유 중인 회원권이 없습니다
                       </div>
@@ -612,9 +551,9 @@ export default function InstructorMembersPage() {
                           <div className="flex items-center justify-between">
                             <div
                               className="px-2.5 py-1 rounded text-xs font-semibold text-white"
-                              style={{ backgroundColor: pass.paymentTypeColor }}
+                              style={{ backgroundColor: pass.payment_type_color }}
                             >
-                              {pass.paymentTypeName}
+                              {pass.payment_type_name}
                             </div>
                             <span
                               className={`px-2 py-0.5 text-xs font-medium rounded ${
@@ -629,7 +568,7 @@ export default function InstructorMembersPage() {
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-gray-600">레슨 횟수</span>
                             <span className="text-sm font-semibold text-gray-900">
-                              {pass.remainingLessons} / {pass.totalLessons}회
+                              {pass.remaining_lessons} / {pass.total_lessons}회
                             </span>
                           </div>
 
@@ -638,17 +577,17 @@ export default function InstructorMembersPage() {
                             <div
                               className="h-2 rounded-full transition-all"
                               style={{
-                                width: `${(pass.remainingLessons / pass.totalLessons) * 100}%`,
-                                backgroundColor: pass.paymentTypeColor
+                                width: `${(pass.remaining_lessons / pass.total_lessons) * 100}%`,
+                                backgroundColor: pass.payment_type_color
                               }}
                             />
                           </div>
 
                           {/* 기간 */}
                           <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>{pass.startDate}</span>
+                            <span>{pass.start_date}</span>
                             <span>~</span>
-                            <span>{pass.endDate}</span>
+                            <span>{pass.end_date || '무제한'}</span>
                           </div>
 
                           {/* 삭제 버튼 */}
