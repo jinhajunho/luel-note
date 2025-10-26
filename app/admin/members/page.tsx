@@ -8,7 +8,11 @@ import {
   createMembershipPackage, 
   deleteMembershipPackage 
 } from '@/app/actions/membership'
-import { convertToMember } from '@/app/actions/members'
+import { 
+  convertToMember,
+  setMemberRole,
+  resetMemberPassword 
+} from '@/app/actions/members'
 import { getPaymentTypes } from '@/app/actions/payment-types'
 import type { Member, MemberPass, PaymentType } from '@/types'
 
@@ -34,8 +38,12 @@ export default function AdminMembersPage() {
     endDate: ''
   })
 
-  // 회원 승격 관련
+  // 회원 승격/권한 설정 관련
   const [convertingMember, setConvertingMember] = useState(false)
+  const [showRoleSelect, setShowRoleSelect] = useState(false)
+  const [selectedRole, setSelectedRole] = useState<'member' | 'instructor' | 'admin'>('member')
+  const [settingRole, setSettingRole] = useState(false)
+  const [resettingPassword, setResettingPassword] = useState(false)
 
   // 상태 색상
   const statusColors = {
@@ -54,6 +62,12 @@ export default function AdminMembersPage() {
     active: 'text-green-600 bg-green-50',
     expired: 'text-gray-600 bg-gray-50',
     exhausted: 'text-red-600 bg-red-50'
+  }
+
+  const roleText = {
+    member: '회원',
+    instructor: '강사',
+    admin: '관리자'
   }
 
   // 회원 데이터 로드
@@ -106,6 +120,7 @@ export default function AdminMembersPage() {
           phone: '010-1234-5678',
           status: 'active',
           type: 'member',
+          role: 'member',
           joinDate: '2025-01-01',
           instructor: '이지은',
           remainingLessons: 12,
@@ -118,6 +133,7 @@ export default function AdminMembersPage() {
           phone: '010-2222-3333',
           status: 'active',
           type: 'member',
+          role: 'instructor',
           joinDate: '2025-01-05',
           instructor: '박서준',
           remainingLessons: 7,
@@ -129,6 +145,7 @@ export default function AdminMembersPage() {
           phone: '010-3333-4444',
           status: 'active',
           type: 'guest',
+          role: null,
           joinDate: '2025-01-10',
           instructor: '이지은',
           remainingLessons: 1,
@@ -215,6 +232,68 @@ export default function AdminMembersPage() {
       alert('회원 전환 중 오류가 발생했습니다')
     } finally {
       setConvertingMember(false)
+    }
+  }
+
+  // 권한 설정
+  const handleSetRole = async () => {
+    if (!selectedMember) return
+
+    const confirmed = confirm(
+      `${selectedMember.name}님의 권한을 "${roleText[selectedRole]}"로 설정하시겠습니까?`
+    )
+
+    if (!confirmed) return
+
+    setSettingRole(true)
+    try {
+      const result = await setMemberRole(selectedMember.phone, selectedRole)
+
+      if (result.success) {
+        alert(`권한이 "${roleText[selectedRole]}"로 설정되었습니다`)
+        setShowRoleSelect(false)
+        await loadMembers()
+      } else {
+        alert(result.error || '권한 설정에 실패했습니다')
+      }
+    } catch (error) {
+      console.error('권한 설정 실패:', error)
+      alert('권한 설정 중 오류가 발생했습니다')
+    } finally {
+      setSettingRole(false)
+    }
+  }
+
+  // 비밀번호 초기화
+  const handleResetPassword = async () => {
+    if (!selectedMember) return
+
+    const confirmed = confirm(
+      `${selectedMember.name}님의 비밀번호를 초기화하시겠습니까?\n\n` +
+      `초기 비밀번호: ${selectedMember.phone.replace(/-/g, '')}\n\n` +
+      `회원에게 초기 비밀번호를 안내해주세요.`
+    )
+
+    if (!confirmed) return
+
+    setResettingPassword(true)
+    try {
+      const result = await resetMemberPassword(selectedMember.phone)
+
+      if (result.success) {
+        alert(
+          `비밀번호가 초기화되었습니다!\n\n` +
+          `초기 비밀번호: ${selectedMember.phone.replace(/-/g, '')}\n\n` +
+          `회원에게 안내해주세요.`
+        )
+      } else {
+        alert(result.error || '비밀번호 초기화에 실패했습니다')
+      }
+    } catch (error) {
+      console.error('비밀번호 초기화 실패:', error)
+      alert('비밀번호 초기화 중 오류가 발생했습니다')
+    } finally {
+      setResettingPassword(false)
     }
   }
 
@@ -366,6 +445,16 @@ export default function AdminMembersPage() {
                             비회원
                           </span>
                         )}
+                        {member.role && (
+                          <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded">
+                            {roleText[member.role]}
+                          </span>
+                        )}
+                        {!member.role && (
+                          <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-600 rounded">
+                            승인 대기
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500 mt-0.5">
                         {member.phone}
@@ -413,6 +502,7 @@ export default function AdminMembersPage() {
             onClick={() => {
               setSelectedMember(null)
               setShowAddPassForm(false)
+              setShowRoleSelect(false)
             }}
           >
             <div
@@ -426,19 +516,75 @@ export default function AdminMembersPage() {
 
               {/* 모달 내용 */}
               <div className="p-6 space-y-5">
-                {/* 비회원 전환 버튼 */}
-                {selectedMember.type === 'guest' && (
+                {/* 관리자 기능 버튼들 */}
+                <div className="space-y-2">
+                  {/* 비회원 전환 버튼 */}
+                  {selectedMember.type === 'guest' && (
+                    <button
+                      onClick={handleConvertToMember}
+                      disabled={convertingMember}
+                      className="w-full py-3 px-5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all"
+                    >
+                      {convertingMember ? '전환 중...' : '✨ 정회원으로 전환'}
+                    </button>
+                  )}
+
+                  {/* 권한 설정 버튼 */}
                   <button
-                    onClick={handleConvertToMember}
-                    disabled={convertingMember}
-                    className="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all active:scale-[0.98]"
+                    onClick={() => setShowRoleSelect(!showRoleSelect)}
+                    className="w-full py-3 px-5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-all"
                   >
-                    {convertingMember ? '전환 중...' : '✨ 정회원으로 전환'}
+                    🔑 권한 설정
                   </button>
-                )}
+
+                  {/* 권한 설정 폼 */}
+                  {showRoleSelect && (
+                    <div className="bg-purple-50 rounded-xl p-4 space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          역할 선택
+                        </label>
+                        <select
+                          value={selectedRole}
+                          onChange={(e) => setSelectedRole(e.target.value as any)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value="member">회원</option>
+                          <option value="instructor">강사</option>
+                          <option value="admin">관리자</option>
+                        </select>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSetRole}
+                          disabled={settingRole}
+                          className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white font-semibold rounded-lg transition-colors"
+                        >
+                          {settingRole ? '설정 중...' : '설정'}
+                        </button>
+                        <button
+                          onClick={() => setShowRoleSelect(false)}
+                          className="flex-1 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 비밀번호 초기화 버튼 */}
+                  <button
+                    onClick={handleResetPassword}
+                    disabled={resettingPassword}
+                    className="w-full py-3 px-5 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all"
+                  >
+                    {resettingPassword ? '초기화 중...' : '🔒 비밀번호 초기화'}
+                  </button>
+                </div>
 
                 {/* 기본 정보 */}
-                <div className="space-y-4">
+                <div className="space-y-4 border-t border-gray-200 pt-5">
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
                     <span className="text-sm text-gray-600">이름</span>
                     <span className="text-sm font-semibold text-gray-900">
@@ -450,6 +596,13 @@ export default function AdminMembersPage() {
                     <span className="text-sm text-gray-600">전화번호</span>
                     <span className="text-sm font-semibold text-gray-900">
                       {selectedMember.phone}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">현재 권한</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {selectedMember.role ? roleText[selectedMember.role] : '없음 (승인 대기)'}
                     </span>
                   </div>
 
@@ -648,6 +801,7 @@ export default function AdminMembersPage() {
                   onClick={() => {
                     setSelectedMember(null)
                     setShowAddPassForm(false)
+                    setShowRoleSelect(false)
                   }}
                   className="flex-1 py-3 w-full bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold rounded-xl transition-colors"
                 >
