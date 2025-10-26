@@ -77,7 +77,8 @@ export default function SignupPage() {
               marginBottom: '16px',
               background: '#fef2f2',
               border: '1px solid #fecaca',
-              color: '#dc2626'
+              color: '#dc2626',
+              boxSizing: 'border-box'
             }}>
               {state.error}
             </div>
@@ -92,9 +93,10 @@ export default function SignupPage() {
               marginBottom: '16px',
               background: '#f0fdf4',
               border: '1px solid #bbf7d0',
-              color: '#16a34a'
+              color: '#16a34a',
+              boxSizing: 'border-box'
             }}>
-              회원가입이 완료되었습니다! 잠시만 기다려주세요...
+              회원가입이 완료되었습니다!
             </div>
           )}
 
@@ -115,6 +117,7 @@ export default function SignupPage() {
                 id="phone"
                 name="phone"
                 placeholder="01012345678"
+                maxLength={11}
                 required
                 disabled={isPending}
                 style={{ 
@@ -126,7 +129,8 @@ export default function SignupPage() {
                   fontSize: '15px', 
                   color: '#111827',
                   opacity: isPending ? '0.5' : '1',
-                  cursor: isPending ? 'not-allowed' : 'text'
+                  cursor: isPending ? 'not-allowed' : 'text',
+                  boxSizing: 'border-box'
                 }}
               />
               <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
@@ -161,29 +165,27 @@ export default function SignupPage() {
                   fontSize: '15px', 
                   color: '#111827',
                   opacity: isPending ? '0.5' : '1',
-                  cursor: isPending ? 'not-allowed' : 'text'
+                  cursor: isPending ? 'not-allowed' : 'text',
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
 
             {/* 생년월일 (선택) */}
             <div style={{ marginBottom: '20px' }}>
-              <label htmlFor="birth_date" style={{ 
+              <label htmlFor="birthdate" style={{ 
                 display: 'block', 
                 fontSize: '14px', 
                 fontWeight: '600', 
                 color: '#374151', 
                 marginBottom: '8px' 
               }}>
-                생년월일
-                <span style={{ fontSize: '12px', fontWeight: '400', color: '#9ca3af', marginLeft: '4px' }}>
-                  (선택)
-                </span>
+                생년월일 <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#9ca3af' }}>(선택)</span>
               </label>
               <input
                 type="date"
-                id="birth_date"
-                name="birth_date"
+                id="birthdate"
+                name="birthdate"
                 disabled={isPending}
                 style={{ 
                   width: '100%', 
@@ -194,7 +196,8 @@ export default function SignupPage() {
                   fontSize: '15px', 
                   color: '#111827',
                   opacity: isPending ? '0.5' : '1',
-                  cursor: isPending ? 'not-allowed' : 'text'
+                  cursor: isPending ? 'not-allowed' : 'text',
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
@@ -208,26 +211,25 @@ export default function SignupPage() {
                 color: '#374151', 
                 marginBottom: '8px' 
               }}>
-                성별
-                <span style={{ fontSize: '12px', fontWeight: '400', color: '#9ca3af', marginLeft: '4px' }}>
-                  (선택)
-                </span>
+                성별 <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#9ca3af' }}>(선택)</span>
               </label>
-              <input type="hidden" name="gender" value={selectedGender} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '12px' }}>
                 <button
                   type="button"
                   onClick={() => setSelectedGender('male')}
                   disabled={isPending}
                   style={{ 
+                    flex: 1, 
                     padding: '12px', 
-                    border: selectedGender === 'male' ? '2px solid #2563eb' : '2px solid #f0ebe1', 
-                    background: selectedGender === 'male' ? '#2563eb' : '#fdfbf7', 
+                    border: selectedGender === 'male' ? '2px solid #2563eb' : '1px solid #f0ebe1', 
+                    background: selectedGender === 'male' ? '#eff6ff' : '#fdfbf7', 
                     borderRadius: '12px', 
                     fontSize: '15px', 
-                    fontWeight: '500', 
-                    color: selectedGender === 'male' ? 'white' : '#6b7280',
-                    cursor: isPending ? 'not-allowed' : 'pointer'
+                    fontWeight: selectedGender === 'male' ? '600' : '400',
+                    color: selectedGender === 'male' ? '#2563eb' : '#6b7280',
+                    cursor: isPending ? 'not-allowed' : 'pointer',
+                    opacity: isPending ? '0.5' : '1',
+                    boxSizing: 'border-box'
                   }}
                 >
                   남성
@@ -237,19 +239,23 @@ export default function SignupPage() {
                   onClick={() => setSelectedGender('female')}
                   disabled={isPending}
                   style={{ 
+                    flex: 1, 
                     padding: '12px', 
-                    border: selectedGender === 'female' ? '2px solid #2563eb' : '2px solid #f0ebe1', 
-                    background: selectedGender === 'female' ? '#2563eb' : '#fdfbf7', 
+                    border: selectedGender === 'female' ? '2px solid #2563eb' : '1px solid #f0ebe1', 
+                    background: selectedGender === 'female' ? '#eff6ff' : '#fdfbf7', 
                     borderRadius: '12px', 
                     fontSize: '15px', 
-                    fontWeight: '500', 
-                    color: selectedGender === 'female' ? 'white' : '#6b7280',
-                    cursor: isPending ? 'not-allowed' : 'pointer'
+                    fontWeight: selectedGender === 'female' ? '600' : '400',
+                    color: selectedGender === 'female' ? '#2563eb' : '#6b7280',
+                    cursor: isPending ? 'not-allowed' : 'pointer',
+                    opacity: isPending ? '0.5' : '1',
+                    boxSizing: 'border-box'
                   }}
                 >
                   여성
                 </button>
               </div>
+              <input type="hidden" name="gender" value={selectedGender} />
             </div>
 
             {/* 비밀번호 */}
@@ -279,7 +285,8 @@ export default function SignupPage() {
                   fontSize: '15px', 
                   color: '#111827',
                   opacity: isPending ? '0.5' : '1',
-                  cursor: isPending ? 'not-allowed' : 'text'
+                  cursor: isPending ? 'not-allowed' : 'text',
+                  boxSizing: 'border-box'
                 }}
               />
               <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
@@ -314,7 +321,8 @@ export default function SignupPage() {
                   fontSize: '15px', 
                   color: '#111827',
                   opacity: isPending ? '0.5' : '1',
-                  cursor: isPending ? 'not-allowed' : 'text'
+                  cursor: isPending ? 'not-allowed' : 'text',
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
@@ -332,7 +340,8 @@ export default function SignupPage() {
                 fontWeight: '600', 
                 border: 'none', 
                 borderRadius: '12px', 
-                cursor: isPending ? 'not-allowed' : 'pointer'
+                cursor: isPending ? 'not-allowed' : 'pointer',
+                boxSizing: 'border-box'
               }}
             >
               {isPending ? '처리 중...' : '회원가입'}

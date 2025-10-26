@@ -76,7 +76,8 @@ export default function LoginPage() {
               marginBottom: '16px',
               background: '#fef2f2',
               border: '1px solid #fecaca',
-              color: '#dc2626'
+              color: '#dc2626',
+              boxSizing: 'border-box'
             }}>
               {state.error}
             </div>
@@ -99,6 +100,7 @@ export default function LoginPage() {
                 id="phone"
                 name="phone"
                 placeholder="01012345678"
+                maxLength={11}
                 required
                 disabled={isPending}
                 style={{ 
@@ -110,7 +112,8 @@ export default function LoginPage() {
                   fontSize: '15px', 
                   color: '#111827',
                   opacity: isPending ? '0.5' : '1',
-                  cursor: isPending ? 'not-allowed' : 'text'
+                  cursor: isPending ? 'not-allowed' : 'text',
+                  boxSizing: 'border-box'
                 }}
               />
               <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
@@ -145,7 +148,8 @@ export default function LoginPage() {
                   fontSize: '15px', 
                   color: '#111827',
                   opacity: isPending ? '0.5' : '1',
-                  cursor: isPending ? 'not-allowed' : 'text'
+                  cursor: isPending ? 'not-allowed' : 'text',
+                  boxSizing: 'border-box'
                 }}
               />
             </div>
@@ -156,7 +160,8 @@ export default function LoginPage() {
               border: '1px solid #bfdbfe', 
               borderRadius: '12px', 
               padding: '12px', 
-              marginBottom: '20px' 
+              marginBottom: '20px',
+              boxSizing: 'border-box'
             }}>
               <p style={{ fontSize: '14px', fontWeight: '600', color: '#1e40af', marginBottom: '4px' }}>
                 💡 비밀번호를 잊으셨나요?
@@ -179,7 +184,8 @@ export default function LoginPage() {
                 fontWeight: '600', 
                 border: 'none', 
                 borderRadius: '12px', 
-                cursor: isPending ? 'not-allowed' : 'pointer'
+                cursor: isPending ? 'not-allowed' : 'pointer',
+                boxSizing: 'border-box'
               }}
             >
               {isPending ? '로그인 중...' : '로그인'}
@@ -197,6 +203,11 @@ export default function LoginPage() {
                 회원가입
               </Link>
             </p>
+          </div>
+
+          {/* 전화번호로 로그인하세요 안내 */}
+          <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '13px', color: '#9ca3af' }}>
+            전화번호로 로그인하세요
           </div>
         </div>
       </div>
