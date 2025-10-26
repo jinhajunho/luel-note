@@ -16,7 +16,9 @@ export default function SignupForm() {
 
       {state?.success && (
         <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-sm text-green-600">회원가입 성공! 로그인해주세요.</p>
+          <p className="text-sm text-green-600">
+            회원가입이 완료되었습니다! 관리자 승인 후 로그인해주세요.
+          </p>
         </div>
       )}
 
@@ -30,7 +32,7 @@ export default function SignupForm() {
           name="phone"
           placeholder="01012345678"
           required
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <p className="text-xs text-gray-500 mt-1">
           숫자만 입력하세요 (하이픈 없이)
@@ -47,7 +49,7 @@ export default function SignupForm() {
           name="name"
           placeholder="홍길동"
           required
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
 
@@ -59,7 +61,7 @@ export default function SignupForm() {
           type="date"
           id="birth_date"
           name="birth_date"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
 
@@ -70,7 +72,7 @@ export default function SignupForm() {
         <select
           id="gender"
           name="gender"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
           <option value="">선택 안 함</option>
           <option value="male">남성</option>
@@ -86,10 +88,9 @@ export default function SignupForm() {
           type="password"
           id="password"
           name="password"
-          placeholder="6자 이상"
+          placeholder="비밀번호 (6자 이상)"
           required
-          minLength={6}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
 
@@ -103,24 +104,17 @@ export default function SignupForm() {
           name="confirmPassword"
           placeholder="비밀번호 확인"
           required
-          minLength={6}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
 
       <button
         type="submit"
         disabled={isPending}
-        className="w-full px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+        className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
       >
         {isPending ? '가입 중...' : '회원가입'}
       </button>
-
-      <div className="text-center">
-        <a href="/login" className="text-sm text-blue-600 hover:text-blue-700">
-          이미 계정이 있으신가요? 로그인
-        </a>
-      </div>
     </form>
   )
 }
