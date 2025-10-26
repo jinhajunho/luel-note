@@ -15,8 +15,8 @@ export default function SignupPage() {
           </p>
         </div>
 
-        {/* 회원가입 폼 */}
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        {/* 회원가입 카드 */}
+        <div className="bg-white rounded-2xl shadow-lg border border-[#f0ebe1] p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             회원가입
           </h2>
@@ -24,6 +24,7 @@ export default function SignupPage() {
             가입 후 관리자의 승인을 기다려주세요
           </p>
 
+          {/* 회원가입 폼 */}
           <SignupForm />
 
           {/* 로그인 링크 */}
@@ -32,7 +33,7 @@ export default function SignupPage() {
               이미 계정이 있으신가요?{' '}
               <Link 
                 href="/login" 
-                className="text-blue-600 hover:text-blue-700 font-semibold"
+                className="text-blue-600 hover:text-blue-700 font-semibold hover:underline"
               >
                 로그인
               </Link>
@@ -41,8 +42,8 @@ export default function SignupPage() {
         </div>
 
         {/* 안내 문구 */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <p className="text-xs text-blue-800">
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-800">
             💡 회원가입 후 관리자가 권한을 설정하면 서비스를 이용할 수 있습니다.
           </p>
         </div>
