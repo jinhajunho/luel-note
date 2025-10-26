@@ -1,61 +1,84 @@
-// 정산 시스템 타입 정의
-// 위치: types/settlement.ts
+// ==================== 정산 타입 정의 ====================
 
-// ==================== 레슨 유형별 집계 ====================
-export type ClassTypeCount = {
+/**
+ * 회원별 정산 데이터
+ */
+export interface MemberSettlement {
+  memberId: string
+  memberName: string
+  totalSessions: number
+  lessonTypes: {
+    intro: number
+    personal: number
+    duet: number
+    group: number
+  }
+  paymentTypes: {
+    trial: number
+    regular: number
+    instructor: number
+    center: number
+  }
+  expanded: boolean
+}
+
+/**
+ * 강사별 정산 데이터 (관리자용)
+ */
+export interface InstructorSettlement {
+  instructorId: string
+  instructorName: string
+  totalSessions: number
+  members: MemberSettlement[]
+  expanded: boolean
+}
+
+/**
+ * 레슨 타입별 집계
+ */
+export interface ClassTypeCount {
   classType: string
   count: number
 }
 
-// ==================== 결제 타입별 집계 ====================
-export type PaymentTypeCount = {
+/**
+ * 결제 타입별 집계
+ */
+export interface PaymentTypeCount {
   paymentType: string
   count: number
 }
 
-// ==================== 회원별 정산 요약 ====================
-export type MemberSettlement = {
-  memberId: string
+/**
+ * 회원별 집계 (강사용)
+ */
+export interface MemberSummary {
   memberName: string
-  totalCount: number
   classTypeCounts: ClassTypeCount[]
   paymentTypeCounts: PaymentTypeCount[]
-  expanded?: boolean
-}
-
-// ==================== 강사별 정산 요약 (관리자용) ====================
-export type InstructorSettlement = {
-  instructorId: string
-  instructorName: string
   totalCount: number
-  members: MemberSettlement[]
-  expanded?: boolean
 }
 
-// ==================== 월별 정산 (강사용) ====================
-export type MonthlySettlement = {
+/**
+ * 강사 정산 데이터
+ */
+export interface InstructorSettlementData {
+  instructorName: string
   year: number
   month: number
-  instructorId: string
-  instructorName: string
+  members: MemberSummary[]
   totalCount: number
-  members: MemberSettlement[]
 }
 
-// ==================== 정산 집계 요청 파라미터 ====================
-export type SettlementQueryParams = {
-  startDate: string  // YYYY-MM-DD
-  endDate: string    // YYYY-MM-DD
-  instructorId?: string  // 강사 필터 (선택)
-}
-
-// ==================== Supabase RPC 응답 타입 ====================
-export type SettlementRPCResponse = {
+/**
+ * DB에서 반환되는 정산 로우 데이터
+ */
+export interface SettlementRow {
   instructor_id: string
   instructor_name: string
   member_id: string
   member_name: string
-  class_type: string
-  payment_type: string
-  lesson_count: number
+  class_type_name: string
+  payment_type_name: string
+  session_count: number
 }
