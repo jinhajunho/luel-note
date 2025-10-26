@@ -3,11 +3,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { phoneToEmail } from '@/lib/auth-helpers'
 
 type ActionState = {
   error?: string
   success?: boolean
 } | undefined
+
+// ==================== 로그인 ====================
 
 export async function login(
   prevState: ActionState,
@@ -21,7 +24,7 @@ export async function login(
   }
 
   const supabase = await createClient()
-  const email = `${phone}@luelnote.app`
+  const email = phoneToEmail(phone)
 
   const { error } = await supabase.auth.signInWithPassword({
     email,
@@ -33,8 +36,23 @@ export async function login(
   }
 
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  
+  // 권한 확인 후 리다이렉트
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('phone', phone)
+    .single()
+
+  if (!profile || !profile.role) {
+    redirect('/pending')
+  }
+
+  // 역할별 기본 페이지로 이동
+  redirect(`/${profile.role}/schedule`)
 }
+
+// ==================== 회원가입 ====================
 
 export async function signup(
   prevState: ActionState,
@@ -65,9 +83,9 @@ export async function signup(
   }
 
   const supabase = await createClient()
-  const email = `${phone}@luelnote.app`
+  const email = phoneToEmail(phone)
 
-  // 1. Auth 사용자 생성만 (심플하게!)
+  // 1. Auth 사용자 생성
   const { data, error } = await supabase.auth.signUp({
     email,
     password
@@ -82,14 +100,14 @@ export async function signup(
     return { error: '사용자 생성 실패' }
   }
 
-  // 2. profiles 수동 추가
+  // 2. profiles 테이블에 추가 (role = null, 승인 대기)
   const { error: profileError } = await supabase
     .from('profiles')
     .insert({
-      phone,
       auth_id: data.user.id,
+      phone,
       name,
-      role: 'member',
+      role: null, // 관리자 승인 대기
       birth_date: birth_date || null,
       gender: gender || null
     })
@@ -99,42 +117,27 @@ export async function signup(
     return { error: `프로필 생성 실패: ${profileError.message}` }
   }
 
-  // 3. members 수동 추가
+  // 3. members 테이블에 추가 (type = 'guest', status = 'active')
   const { error: memberError } = await supabase
     .from('members')
     .insert({
-      id: phone,
+      phone,
+      profile_id: data.user.id,
       name,
-      is_guest: true,
-      status: 'guest',
+      type: 'guest',
+      status: 'active',
       join_date: new Date().toISOString().split('T')[0]
     })
 
   if (memberError) {
     console.error('회원 오류:', memberError)
-    // 에러 무시
-  }
-
-  // 4. permissions 수동 추가
-  const { error: permError } = await supabase
-    .from('user_permissions')
-    .insert({
-      user_phone: phone,
-      menu_dashboard: true,
-      menu_attendance: true,
-      menu_members: false,
-      menu_classes: false,
-      menu_settlements: false,
-      menu_settings: true
-    })
-
-  if (permError) {
-    console.error('권한 오류:', permError)
-    // 에러 무시
+    // 에러 무시 (선택적)
   }
 
   return { success: true }
 }
+
+// ==================== 로그아웃 ====================
 
 export async function signOut() {
   const supabase = await createClient()
