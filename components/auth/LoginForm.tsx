@@ -2,7 +2,6 @@
 
 import { useActionState } from 'react'
 import { login } from '@/app/actions/auth'
-import { formatPhone } from '@/lib/utils/phone'
 
 export default function LoginForm() {
   const [state, formAction, isPending] = useActionState(login, null)
@@ -25,8 +24,11 @@ export default function LoginForm() {
           name="phone"
           placeholder="01012345678"
           required
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
+        <p className="text-xs text-gray-500 mt-1">
+          숫자만 입력하세요 (하이픈 없이)
+        </p>
       </div>
 
       <div>
@@ -39,14 +41,14 @@ export default function LoginForm() {
           name="password"
           placeholder="비밀번호를 입력하세요"
           required
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
 
       <button
         type="submit"
         disabled={isPending}
-        className="w-full px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+        className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
       >
         {isPending ? '로그인 중...' : '로그인'}
       </button>
