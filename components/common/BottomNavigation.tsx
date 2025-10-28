@@ -11,57 +11,19 @@ interface BottomNavigationProps {
 export default function BottomNavigation({ profile }: BottomNavigationProps) {
   const pathname = usePathname()
 
+  // 현재 페이지 활성 체크
+  const isActive = (href: string) => {
+    if (href === '/dashboard') {
+      return pathname === '/dashboard' || pathname === '/admin/dashboard' || pathname === '/instructor/dashboard'
+    }
+    return pathname.startsWith(href)
+  }
+
   // 역할별 메뉴 정의
   const getMenuItems = () => {
     // 회원 메뉴 (2개)
     if (profile.role === 'member') {
       return [
-        {
-          href: '/dashboard',
-          label: '일정',
-          isCenter: true,
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          )
-        },
-        {
-          href: '/attendance',
-          label: '출석',
-          isCenter: false,
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          )
-        }
-      ]
-    }
-
-    // 강사 메뉴 (5개) - 순서 변경
-    if (profile.role === 'instructor') {
-      return [
-        {
-          href: '/members',
-          label: '회원',
-          isCenter: false,
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          )
-        },
-        {
-          href: '/attendance',
-          label: '출석',
-          isCenter: false,
-          icon: (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          )
-        },
         {
           href: '/dashboard',
           label: '일정',
@@ -73,7 +35,53 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
           )
         },
         {
-          href: '/sessions',
+          href: '/attendance',
+          label: '출석',
+          isCenter: false,
+          icon: (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )
+        }
+      ]
+    }
+
+    // 강사 메뉴 (5개) - 순서: 회원 | 출석 | 일정(중앙) | 수업 | 정산
+    if (profile.role === 'instructor') {
+      return [
+        {
+          href: '/instructor/members',
+          label: '회원',
+          isCenter: false,
+          icon: (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          )
+        },
+        {
+          href: '/instructor/attendance',
+          label: '출석',
+          isCenter: false,
+          icon: (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )
+        },
+        {
+          href: '/instructor/dashboard',
+          label: '일정',
+          isCenter: true,
+          icon: (
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          )
+        },
+        {
+          href: '/instructor/lessons',
           label: '수업',
           isCenter: false,
           icon: (
@@ -83,7 +91,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
           )
         },
         {
-          href: '/finance/instructor',
+          href: '/instructor/finance',
           label: '정산',
           isCenter: false,
           icon: (
@@ -95,10 +103,10 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
       ]
     }
 
-    // 관리자 메뉴 (5개) - 순서 변경
+    // 관리자 메뉴 (5개) - 순서: 회원 | 출석 | 일정(중앙) | 수업 | 정산
     return [
       {
-        href: '/members',
+        href: '/admin/members',
         label: '회원',
         isCenter: false,
         icon: (
@@ -108,7 +116,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
         )
       },
       {
-        href: '/attendance',
+        href: '/admin/attendance',
         label: '출석',
         isCenter: false,
         icon: (
@@ -118,7 +126,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
         )
       },
       {
-        href: '/dashboard',
+        href: '/admin/dashboard',
         label: '일정',
         isCenter: true,
         icon: (
@@ -128,7 +136,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
         )
       },
       {
-        href: '/sessions',
+        href: '/admin/classes',
         label: '수업',
         isCenter: false,
         icon: (
@@ -138,7 +146,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
         )
       },
       {
-        href: '/finance/admin',
+        href: '/admin/finance',
         label: '정산',
         isCenter: false,
         icon: (
@@ -152,45 +160,40 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
 
   const menuItems = getMenuItems()
 
-  // 현재 경로가 활성 메뉴인지 체크
-  const isActive = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === '/dashboard' || pathname === '/'
-    }
-    return pathname.startsWith(href)
-  }
-
   return (
     <>
-      {/* 물방울 애니메이션을 위한 스타일 */}
-      <style jsx>{`
+      {/* blob-morph 애니메이션 키프레임 */}
+      <style jsx global>{`
         @keyframes blob-morph {
           0%, 100% {
             border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
           }
           25% {
-            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+            border-radius: 60% 40% 30% 70% / 50% 60% 40% 50%;
           }
           50% {
-            border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
+            border-radius: 30% 60% 70% 40% / 50% 40% 60% 50%;
           }
           75% {
-            border-radius: 50% 50% 30% 70% / 30% 60% 70% 40%;
+            border-radius: 60% 30% 50% 60% / 40% 60% 50% 60%;
           }
         }
-        
+
         .blob-button {
           animation: blob-morph 6s ease-in-out infinite;
         }
-        
-        .blob-button:hover {
-          animation-play-state: paused;
-        }
       `}</style>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-area-bottom z-40">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="relative flex justify-around items-end h-16">
+      {/* 하단 네비게이션 */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#f0ebe1] z-[1000]">
+        <div 
+          className="max-w-[600px] mx-auto"
+          style={{
+            paddingTop: '8px',
+            paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
+          }}
+        >
+          <div className="relative flex justify-around items-center px-5">
             {menuItems.map((item) => (
               item.isCenter ? (
                 // 가운데 물방울 버튼 (일정)
