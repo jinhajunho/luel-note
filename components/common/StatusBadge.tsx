@@ -1,46 +1,46 @@
+// components/common/StatusBadge.tsx
 interface StatusBadgeProps {
-  type: 'class' | 'payment'
+  type: 'class' | 'payment' | 'status'
   value: string
-  size?: 'sm' | 'md' | 'lg'
+  className?: string
 }
 
-export default function StatusBadge({ type, value, size = 'md' }: StatusBadgeProps) {
-  // 크기별 스타일
-  const sizeClasses = {
-    sm: 'px-2 py-0.5 text-xs',
-    md: 'px-3 py-1 text-sm',
-    lg: 'px-4 py-1.5 text-base'
-  }
-
-  // 레슨 유형 색상
+export default function StatusBadge({ type, value, className = '' }: StatusBadgeProps) {
+  // 레슨 유형 색상 (진한 톤)
   const classTypeColors: Record<string, string> = {
-    '인트로': 'bg-gray-100 text-gray-700 border-gray-300',
-    '개인레슨': 'bg-purple-100 text-purple-700 border-purple-300',
-    '듀엣레슨': 'bg-pink-100 text-pink-700 border-pink-300',
-    '그룹레슨': 'bg-orange-100 text-orange-700 border-orange-300'
+    인트로: 'bg-gray-100 text-gray-700',       // 회색 (체험수업과 동일)
+    개인레슨: 'bg-purple-500 text-white',      // 찐보라
+    듀엣레슨: 'bg-pink-500 text-white',        // 찐핑크
+    그룹레슨: 'bg-orange-500 text-white',      // 찐주황
   }
 
-  // 결제 타입 색상
+  // 결제 타입 색상 (진한 톤)
   const paymentTypeColors: Record<string, string> = {
-    '체험수업': 'bg-amber-100 text-amber-700 border-amber-300',
-    '정규수업': 'bg-blue-100 text-blue-700 border-blue-300',
-    '강사제공': 'bg-green-100 text-green-700 border-green-300',
-    '센터제공': 'bg-yellow-100 text-yellow-700 border-yellow-300'
+    체험수업: 'bg-gray-100 text-gray-700',     // 회색 (인트로와 동일)
+    정규수업: 'bg-blue-500 text-white',        // 찐파랑
+    강사제공: 'bg-indigo-600 text-white',      // 찐남색
+    센터제공: 'bg-cyan-500 text-white',        // 밝은 청록
   }
 
-  // 타입에 따라 색상 선택
-  const colorClass = type === 'class' 
-    ? classTypeColors[value] || 'bg-gray-100 text-gray-700 border-gray-300'
-    : paymentTypeColors[value] || 'bg-gray-100 text-gray-700 border-gray-300'
+  // 레슨 상태 색상 (연한 톤)
+  const statusColors: Record<string, string> = {
+    예정: 'bg-blue-50 text-blue-600',          // 연파랑
+    완료: 'bg-green-50 text-green-600',        // 연초록
+    취소: 'bg-red-50 text-red-600',            // 연빨강
+  }
+
+  let colorClass = ''
+  if (type === 'class') {
+    colorClass = classTypeColors[value] || 'bg-gray-200 text-gray-700'
+  } else if (type === 'payment') {
+    colorClass = paymentTypeColors[value] || 'bg-gray-200 text-gray-700'
+  } else if (type === 'status') {
+    colorClass = statusColors[value] || 'bg-gray-200 text-gray-700'
+  }
 
   return (
     <span
-      className={`
-        inline-flex items-center justify-center
-        font-medium rounded-full border
-        ${sizeClasses[size]}
-        ${colorClass}
-      `}
+      className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${colorClass} ${className}`}
     >
       {value}
     </span>
