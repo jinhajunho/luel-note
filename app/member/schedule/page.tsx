@@ -2,16 +2,24 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Header from '@/components/common/Header'
+import BottomNavigation from '@/components/common/BottomNavigation'
+import Button from '@/components/common/Button'
+import StatusBadge from '@/components/common/StatusBadge'
+import EmptyState from '@/components/common/EmptyState'
+import Loading from '@/components/common/Loading'
 
 // ==================== 타입 정의 ====================
 type Lesson = {
   id: string
+  date: string
   time: string
-  type: '인트로' | '개인레슨' | '듀엣레슨' | '그룹레슨'
-  room: string
+  classType: '인트로' | '개인레슨' | '듀엣레슨' | '그룹레슨'
+  paymentType: '체험수업' | '정규수업' | '강사제공' | '센터제공'
   instructor: string
-  status: 'scheduled' | 'completed'
-  totalMembers: number
+  room: string
+  status: '예정' | '완료' | '취소'
+  members: string[]
 }
 
 // ==================== 메인 컴포넌트 ====================
@@ -22,63 +30,59 @@ export default function MemberSchedulePage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [weekScheduled, setWeekScheduled] = useState(0)
   const [remainingSessions, setRemainingSessions] = useState(0)
+  const [loading, setLoading] = useState(true)
 
   const memberName = '홍길동'
-
-  const statusText = {
-    scheduled: '예정',
-    completed: '완료'
-  }
-
-  // 레슨 타입 클래스 (HTML과 완전 동일)
-  const getTypeClass = (type: string) => {
-    switch (type) {
-      case '인트로': return 'bg-[#94a3b8]'
-      case '개인레슨': return 'bg-[#8b5cf6]'
-      case '듀엣레슨': return 'bg-[#ec4899]'
-      case '그룹레슨': return 'bg-[#f97316]'
-      default: return 'bg-[#94a3b8]'
-    }
-  }
 
   useEffect(() => {
     loadLessons()
   }, [currentDate])
 
   const loadLessons = async () => {
+    setLoading(true)
     // TODO: Supabase
     const mockData: Lesson[] = [
       {
         id: '1',
+        date: '2025-10-22',
         time: '10:00',
-        type: '개인레슨',
-        room: 'A룸',
+        classType: '개인레슨',
+        paymentType: '정규수업',
         instructor: '김강사',
-        status: 'completed',
-        totalMembers: 1
+        room: 'A룸',
+        status: '완료',
+        members: ['홍길동']
       },
       {
         id: '2',
+        date: '2025-10-22',
         time: '14:00',
-        type: '그룹레슨',
-        room: 'B룸',
+        classType: '그룹레슨',
+        paymentType: '정규수업',
         instructor: '이강사',
-        status: 'scheduled',
-        totalMembers: 6
+        room: 'B룸',
+        status: '예정',
+        members: ['홍길동', '김철수', '이영희', '박민수', '최지은', '정다은']
       },
       {
         id: '3',
+        date: '2025-10-22',
         time: '19:00',
-        type: '그룹레슨',
-        room: 'A룸',
+        classType: '그룹레슨',
+        paymentType: '정규수업',
         instructor: '박강사',
-        status: 'scheduled',
-        totalMembers: 4
+        room: 'A룸',
+        status: '예정',
+        members: ['홍길동', '김철수', '이영희', '박민수']
       }
     ]
-    setLessons(mockData)
-    setWeekScheduled(3)
-    setRemainingSessions(12)
+    
+    setTimeout(() => {
+      setLessons(mockData)
+      setWeekScheduled(3)
+      setRemainingSessions(12)
+      setLoading(false)
+    }, 500)
   }
 
   // 캘린더 생성
@@ -117,15 +121,13 @@ export default function MemberSchedulePage() {
       days.push(
         <div
           key={day}
-          onClick={() => {
-            setCurrentDate(new Date(year, month, day))
-          }}
+          onClick={() => setCurrentDate(new Date(year, month, day))}
           className={`
             aspect-square flex items-center justify-center rounded-lg
             text-[13px] font-medium cursor-pointer transition-all relative
             ${isToday ? 'bg-[#f0ebe1] font-semibold' : ''}
-            ${isSelected ? 'bg-[#2563eb] text-white font-semibold' : 'text-gray-900'}
-            ${hasSession && !isSelected ? 'after:content-[""] after:absolute after:bottom-1 after:w-1 after:h-1 after:bg-[#2563eb] after:rounded-full' : ''}
+            ${isSelected ? 'bg-[#1a1a1a] text-white font-semibold' : 'text-gray-900'}
+            ${hasSession && !isSelected ? 'after:content-[""] after:absolute after:bottom-1 after:w-1 after:h-1 after:bg-[#1a1a1a] after:rounded-full' : ''}
             ${hasSession && isSelected ? 'after:content-[""] after:absolute after:bottom-1 after:w-1 after:h-1 after:bg-white after:rounded-full' : ''}
             ${!isSelected && !isToday ? 'hover:bg-[#f5f1e8]' : ''}
           `}
@@ -140,10 +142,9 @@ export default function MemberSchedulePage() {
 
   // 출석 체크
   const checkAttendance = (id: string) => {
-    alert('출석 체크되었습니다!\n(실제로는 출석 확인 페이지로 이동하거나 QR 스캔)')
-    
+    alert('출석 체크되었습니다!')
     const updatedLessons = lessons.map(lesson =>
-      lesson.id === id ? { ...lesson, status: 'completed' as const } : lesson
+      lesson.id === id ? { ...lesson, status: '완료' as const } : lesson
     )
     setLessons(updatedLessons)
   }
@@ -166,9 +167,21 @@ export default function MemberSchedulePage() {
     }).format(date)
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#fdfbf7]">
+        <Header />
+        <Loading />
+        <BottomNavigation />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#fdfbf7]">
-      {/* 컨테이너 */}
+      <Header />
+      
+      {/* 메인 컨텐츠 */}
       <div className="max-w-[672px] mx-auto px-5 py-5 pb-24">
         {/* 오늘의 요약 카드 */}
         <div className="bg-white border border-[#f0ebe1] rounded-xl p-5 mb-4">
@@ -237,10 +250,7 @@ export default function MemberSchedulePage() {
           {/* 요일 */}
           <div className="grid grid-cols-7 gap-1 mb-1">
             {['일', '월', '화', '수', '목', '금', '토'].map(day => (
-              <div
-                key={day}
-                className="text-center text-[11px] font-semibold text-[#9d917f] py-2"
-              >
+              <div key={day} className="text-center text-[11px] font-semibold text-[#9d917f] py-2">
                 {day}
               </div>
             ))}
@@ -259,40 +269,27 @@ export default function MemberSchedulePage() {
           </h2>
           
           {lessons.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-5xl mb-3">📅</div>
-              <div className="text-sm text-[#7a6f61]">
-                예정된 레슨이 없습니다
-              </div>
-            </div>
+            <EmptyState
+              icon="📅"
+              title="예정된 레슨이 없습니다"
+            />
           ) : (
             <div className="space-y-3">
               {lessons.map(lesson => {
                 let participantsText = memberName
-                if (lesson.totalMembers > 1) {
-                  participantsText += ` 외 ${lesson.totalMembers - 1}명`
+                if (lesson.members.length > 1) {
+                  participantsText += ` 외 ${lesson.members.length - 1}명`
                 }
                 
                 return (
-                  <div
-                    key={lesson.id}
-                    className="border border-[#f0ebe1] rounded-[10px] p-4"
-                  >
+                  <div key={lesson.id} className="border border-[#f0ebe1] rounded-[10px] p-4">
                     {/* 상단: 시간, 타입, 상태 */}
                     <div className="flex items-center gap-2 mb-2">
                       <div className="text-sm font-semibold text-gray-900">
                         {lesson.time}
                       </div>
-                      <div className={`px-2.5 py-1 rounded-md text-xs font-medium text-white ${getTypeClass(lesson.type)}`}>
-                        {lesson.type}
-                      </div>
-                      <div className={`ml-auto px-2.5 py-1 rounded-md text-xs font-medium ${
-                        lesson.status === 'scheduled' 
-                          ? 'bg-[#dbeafe] text-[#2563eb]' 
-                          : 'bg-[#dcfce7] text-[#16a34a]'
-                      }`}>
-                        {statusText[lesson.status]}
-                      </div>
+                      <StatusBadge type="class" value={lesson.classType} />
+                      <StatusBadge type="status" value={lesson.status} className="ml-auto" />
                     </div>
                     
                     {/* 강사, 룸 */}
@@ -306,20 +303,22 @@ export default function MemberSchedulePage() {
                     </div>
                     
                     {/* 액션 */}
-                    {lesson.status === 'completed' ? (
+                    {lesson.status === '완료' ? (
                       <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#dcfce7] text-[#16a34a] text-sm font-medium">
                         ✓ 출석 완료
                       </div>
                     ) : (
-                      <button
+                      <Button
+                        variant="primary"
+                        size="md"
+                        fullWidth
                         onClick={() => checkAttendance(lesson.id)}
-                        className="w-full py-2.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                         출석 체크
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )
@@ -328,6 +327,8 @@ export default function MemberSchedulePage() {
           )}
         </div>
       </div>
+
+      <BottomNavigation />
     </div>
   )
 }
