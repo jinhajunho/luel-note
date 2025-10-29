@@ -1,31 +1,52 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import type { Profile } from '@/types'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 
-interface BottomNavigationProps {
-  profile: Profile
+type Profile = {
+  id: string
+  name: string
+  role: 'member' | 'instructor' | 'admin'
+  email: string
 }
 
-export default function BottomNavigation({ profile }: BottomNavigationProps) {
+export default function BottomNavigation() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // 현재 페이지 활성 체크
-  const isActive = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === '/dashboard' || pathname === '/admin/dashboard' || pathname === '/instructor/dashboard'
+  useEffect(() => {
+    loadProfile()
+  }, [])
+
+  const loadProfile = async () => {
+    try {
+      setTimeout(() => {
+        setProfile({
+          id: '1',
+          name: '홍길동',
+          role: 'member',
+          email: 'hong@example.com'
+        })
+        setLoading(false)
+      }, 100)
+    } catch (error) {
+      console.error('프로필 로드 실패:', error)
+      setLoading(false)
     }
-    return pathname.startsWith(href)
   }
 
-  // 역할별 메뉴 정의
+  if (loading || !profile) {
+    return null
+  }
+
   const getMenuItems = () => {
     // 회원 메뉴 (2개)
     if (profile.role === 'member') {
       return [
         {
-          href: '/dashboard',
+          href: '/member/schedule',
           label: '일정',
           isCenter: true,
           icon: (
@@ -35,7 +56,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
           )
         },
         {
-          href: '/attendance',
+          href: '/member/attendance',
           label: '출석',
           isCenter: false,
           icon: (
@@ -47,7 +68,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
       ]
     }
 
-    // 강사 메뉴 (5개) - 순서: 회원 | 출석 | 일정(중앙) | 수업 | 정산
+    // 강사 메뉴 (5개)
     if (profile.role === 'instructor') {
       return [
         {
@@ -86,7 +107,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
           isCenter: false,
           icon: (
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           )
         },
@@ -103,7 +124,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
       ]
     }
 
-    // 관리자 메뉴 (5개) - 순서: 회원 | 출석 | 일정(중앙) | 수업 | 정산
+    // 관리자 메뉴 (5개)
     return [
       {
         href: '/admin/members',
@@ -141,7 +162,7 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
         isCenter: false,
         icon: (
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
           </svg>
         )
       },
@@ -161,87 +182,61 @@ export default function BottomNavigation({ profile }: BottomNavigationProps) {
   const menuItems = getMenuItems()
 
   return (
-    <>
-      {/* blob-morph 애니메이션 키프레임 */}
-      <style jsx global>{`
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#f0ebe1] z-40 safe-area-bottom">
+      <div className="max-w-2xl mx-auto px-2 h-16 flex items-center justify-around relative">
+        {menuItems.map((item, index) => {
+          const isActive = pathname === item.href
+          const isCenterButton = item.isCenter
+
+          if (isCenterButton) {
+            return (
+              <button
+                key={item.href}
+                onClick={() => router.push(item.href)}
+                className="absolute left-1/2 -translate-x-1/2 -top-6 w-[72px] h-[72px] rounded-full flex items-center justify-center text-white transition-all shadow-lg"
+                style={{
+                  background: isActive
+                    ? 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%)'
+                    : 'linear-gradient(135deg, #14b8a6 0%, #06b6d4 50%, #ec4899 100%)',
+                  animation: 'blob-morph 6s ease-in-out infinite'
+                }}
+              >
+                {item.icon}
+              </button>
+            )
+          }
+
+          return (
+            <button
+              key={item.href}
+              onClick={() => router.push(item.href)}
+              className={`flex flex-col items-center justify-center gap-1 min-w-[60px] transition-colors ${
+                isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              {item.icon}
+              <span className="text-xs font-medium">{item.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <style jsx>{`
         @keyframes blob-morph {
           0%, 100% {
-            border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
           }
           25% {
-            border-radius: 60% 40% 30% 70% / 50% 60% 40% 50%;
+            border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
           }
           50% {
-            border-radius: 30% 60% 70% 40% / 50% 40% 60% 50%;
+            border-radius: 50% 60% 30% 60% / 30% 60% 70% 40%;
           }
           75% {
-            border-radius: 60% 30% 50% 60% / 40% 60% 50% 60%;
+            border-radius: 60% 40% 60% 40% / 70% 30% 50% 60%;
           }
         }
-
-        .blob-button {
-          animation: blob-morph 6s ease-in-out infinite;
-        }
       `}</style>
-
-      {/* 하단 네비게이션 */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#f0ebe1] z-[1000]">
-        <div 
-          className="max-w-[600px] mx-auto"
-          style={{
-            paddingTop: '8px',
-            paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
-          }}
-        >
-          <div className="relative flex justify-around items-center px-5">
-            {menuItems.map((item) => (
-              item.isCenter ? (
-                // 가운데 물방울 버튼 (일정)
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`
-                    blob-button
-                    absolute left-1/2 -translate-x-1/2 -top-6
-                    flex flex-col items-center justify-center
-                    w-[72px] h-[72px]
-                    shadow-lg
-                    transition-all duration-300
-                    ${isActive(item.href)
-                      ? 'bg-gradient-to-br from-blue-400 via-purple-400 to-pink-300 text-white scale-110'
-                      : 'bg-gradient-to-br from-cyan-200 via-teal-200 to-pink-200 text-gray-700 hover:scale-105'
-                    }
-                  `}
-                  style={{
-                    borderRadius: '40% 60% 70% 30% / 40% 50% 60% 50%'
-                  }}
-                >
-                  <div className="flex flex-col items-center">
-                    {item.icon}
-                    <span className="text-[10px] font-semibold mt-1">{item.label}</span>
-                  </div>
-                </Link>
-              ) : (
-                // 일반 버튼들
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`
-                    flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors
-                    ${isActive(item.href)
-                      ? 'text-blue-600'
-                      : 'text-gray-500 hover:text-gray-900'
-                    }
-                  `}
-                >
-                  {item.icon}
-                  <span className="text-xs font-medium">{item.label}</span>
-                </Link>
-              )
-            ))}
-          </div>
-        </div>
-      </nav>
-    </>
+    </nav>
   )
 }
