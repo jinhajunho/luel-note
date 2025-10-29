@@ -23,32 +23,30 @@ export default function MemberSchedulePage() {
   const [weekScheduled, setWeekScheduled] = useState(0)
   const [remainingSessions, setRemainingSessions] = useState(0)
 
-  const memberName = '홍길동' // 실제로는 로그인한 회원 이름
+  const memberName = '홍길동'
 
-  // 상태 텍스트
   const statusText = {
     scheduled: '예정',
     completed: '완료'
   }
 
-  // 레슨 타입 클래스
+  // 레슨 타입 클래스 (HTML과 완전 동일)
   const getTypeClass = (type: string) => {
-    const classes = {
-      '인트로': 'bg-gray-400',
-      '개인레슨': 'bg-purple-500',
-      '듀엣레슨': 'bg-pink-500',
-      '그룹레슨': 'bg-orange-500'
+    switch (type) {
+      case '인트로': return 'bg-[#94a3b8]'
+      case '개인레슨': return 'bg-[#8b5cf6]'
+      case '듀엣레슨': return 'bg-[#ec4899]'
+      case '그룹레슨': return 'bg-[#f97316]'
+      default: return 'bg-[#94a3b8]'
     }
-    return classes[type as keyof typeof classes] || 'bg-gray-400'
   }
 
   useEffect(() => {
     loadLessons()
   }, [currentDate])
 
-  // 레슨 데이터 로드
   const loadLessons = async () => {
-    // TODO: Supabase에서 데이터 가져오기
+    // TODO: Supabase
     const mockData: Lesson[] = [
       {
         id: '1',
@@ -93,7 +91,6 @@ export default function MemberSchedulePage() {
     const daysInMonth = lastDay.getDate()
     const today = new Date()
     
-    // 회원의 레슨이 있는 날짜 (mock)
     const sessionDays = [16, 18, 20, 22, 25, 27, 29]
 
     const days = []
@@ -125,10 +122,11 @@ export default function MemberSchedulePage() {
           }}
           className={`
             aspect-square flex items-center justify-center rounded-lg
-            text-sm font-medium cursor-pointer transition-all
+            text-[13px] font-medium cursor-pointer transition-all relative
             ${isToday ? 'bg-[#f0ebe1] font-semibold' : ''}
-            ${isSelected ? 'bg-blue-600 text-white font-semibold' : 'text-gray-900'}
-            ${hasSession && !isSelected ? 'relative after:content-[""] after:absolute after:bottom-1 after:w-1 after:h-1 after:bg-blue-600 after:rounded-full' : ''}
+            ${isSelected ? 'bg-[#2563eb] text-white font-semibold' : 'text-gray-900'}
+            ${hasSession && !isSelected ? 'after:content-[""] after:absolute after:bottom-1 after:w-1 after:h-1 after:bg-[#2563eb] after:rounded-full' : ''}
+            ${hasSession && isSelected ? 'after:content-[""] after:absolute after:bottom-1 after:w-1 after:h-1 after:bg-white after:rounded-full' : ''}
             ${!isSelected && !isToday ? 'hover:bg-[#f5f1e8]' : ''}
           `}
         >
@@ -142,7 +140,6 @@ export default function MemberSchedulePage() {
 
   // 출석 체크
   const checkAttendance = (id: string) => {
-    // TODO: 실제 출석 처리 로직
     alert('출석 체크되었습니다!\n(실제로는 출석 확인 페이지로 이동하거나 QR 스캔)')
     
     const updatedLessons = lessons.map(lesson =>
@@ -171,8 +168,8 @@ export default function MemberSchedulePage() {
 
   return (
     <div className="min-h-screen bg-[#fdfbf7]">
-      {/* 메인 컨텐츠 */}
-      <div className="max-w-2xl mx-auto px-5 py-5 pb-24">
+      {/* 컨테이너 */}
+      <div className="max-w-[672px] mx-auto px-5 py-5 pb-24">
         {/* 오늘의 요약 카드 */}
         <div className="bg-white border border-[#f0ebe1] rounded-xl p-5 mb-4">
           <div className="text-sm text-[#7a6f61] mb-2 font-medium">
@@ -183,7 +180,7 @@ export default function MemberSchedulePage() {
           </h2>
           
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-lg p-4">
+            <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-[10px] p-4">
               <div className="text-xs text-[#7a6f61] mb-1.5 font-medium">
                 이번 주 예정
               </div>
@@ -193,7 +190,7 @@ export default function MemberSchedulePage() {
               </div>
             </div>
             
-            <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-lg p-4">
+            <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-[10px] p-4">
               <div className="text-xs text-[#7a6f61] mb-1.5 font-medium">
                 잔여 레슨
               </div>
@@ -219,7 +216,7 @@ export default function MemberSchedulePage() {
                   newDate.setMonth(newDate.getMonth() - 1)
                   setCalendarDate(newDate)
                 }}
-                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-all"
+                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-sm text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-all font-semibold"
               >
                 ←
               </button>
@@ -230,7 +227,7 @@ export default function MemberSchedulePage() {
                   newDate.setMonth(newDate.getMonth() + 1)
                   setCalendarDate(newDate)
                 }}
-                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-all"
+                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-sm text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-all font-semibold"
               >
                 →
               </button>
@@ -242,7 +239,7 @@ export default function MemberSchedulePage() {
             {['일', '월', '화', '수', '목', '금', '토'].map(day => (
               <div
                 key={day}
-                className="text-center text-xs font-semibold text-[#9d917f] py-2"
+                className="text-center text-[11px] font-semibold text-[#9d917f] py-2"
               >
                 {day}
               </div>
@@ -263,7 +260,7 @@ export default function MemberSchedulePage() {
           
           {lessons.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-4xl mb-3">📅</div>
+              <div className="text-5xl mb-3">📅</div>
               <div className="text-sm text-[#7a6f61]">
                 예정된 레슨이 없습니다
               </div>
@@ -271,7 +268,6 @@ export default function MemberSchedulePage() {
           ) : (
             <div className="space-y-3">
               {lessons.map(lesson => {
-                // 참가자 정보
                 let participantsText = memberName
                 if (lesson.totalMembers > 1) {
                   participantsText += ` 외 ${lesson.totalMembers - 1}명`
@@ -280,7 +276,7 @@ export default function MemberSchedulePage() {
                 return (
                   <div
                     key={lesson.id}
-                    className="border border-[#f0ebe1] rounded-lg p-4"
+                    className="border border-[#f0ebe1] rounded-[10px] p-4"
                   >
                     {/* 상단: 시간, 타입, 상태 */}
                     <div className="flex items-center gap-2 mb-2">
@@ -292,8 +288,8 @@ export default function MemberSchedulePage() {
                       </div>
                       <div className={`ml-auto px-2.5 py-1 rounded-md text-xs font-medium ${
                         lesson.status === 'scheduled' 
-                          ? 'bg-blue-50 text-blue-600' 
-                          : 'bg-green-50 text-green-600'
+                          ? 'bg-[#dbeafe] text-[#2563eb]' 
+                          : 'bg-[#dcfce7] text-[#16a34a]'
                       }`}>
                         {statusText[lesson.status]}
                       </div>
@@ -311,16 +307,13 @@ export default function MemberSchedulePage() {
                     
                     {/* 액션 */}
                     {lesson.status === 'completed' ? (
-                      <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-50 text-green-600 text-sm font-medium">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        출석 완료
+                      <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#dcfce7] text-[#16a34a] text-sm font-medium">
+                        ✓ 출석 완료
                       </div>
                     ) : (
                       <button
                         onClick={() => checkAttendance(lesson.id)}
-                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                        className="w-full py-2.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
