@@ -1,333 +1,340 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/auth-context'
-import Header from '@/components/common/Header'
-import BottomNavigation from '@/components/common/BottomNavigation'
-import StatusBadge from '@/components/common/StatusBadge'
-import Loading from '@/components/common/Loading'
-import EmptyState from '@/components/common/EmptyState'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-// 타입 정의
+// ==================== 타입 정의 ====================
 type Lesson = {
   id: string
-  date: string
   time: string
-  classType: string
-  paymentType: string
+  type: '인트로' | '개인레슨' | '듀엣레슨' | '그룹레슨'
+  room: string
   instructor: string
-  status: 'scheduled' | 'completed' | 'cancelled'
-  attended: boolean | null
+  status: 'scheduled' | 'completed'
+  totalMembers: number
 }
 
-// 캘린더 컴포넌트
-function Calendar({ 
-  value, 
-  onChange,
-  lessonDates
-}: { 
-  value: Date
-  onChange: (date: Date) => void
-  lessonDates: number[]
-}) {
-  const year = value.getFullYear()
-  const month = value.getMonth()
-  
-  const firstDay = new Date(year, month, 1)
-  const lastDay = new Date(year, month + 1, 0)
-  const startDay = firstDay.getDay()
-  const daysInMonth = lastDay.getDate()
-  
-  const days: (number | null)[] = []
-  
-  for (let i = 0; i < startDay; i++) {
-    days.push(null)
-  }
-  
-  for (let i = 1; i <= daysInMonth; i++) {
-    days.push(i)
-  }
-  
-  const prevMonth = () => onChange(new Date(year, month - 1, 1))
-  const nextMonth = () => onChange(new Date(year, month + 1, 1))
-  const selectDate = (day: number) => onChange(new Date(year, month, day))
-  
-  const today = new Date()
-  const isToday = (day: number) => {
-    return (
-      day === today.getDate() &&
-      month === today.getMonth() &&
-      year === today.getFullYear()
-    )
-  }
-  
-  const isSelected = (day: number) => {
-    return (
-      day === value.getDate() &&
-      month === value.getMonth() &&
-      year === value.getFullYear()
-    )
-  }
-
-  const hasLesson = (day: number) => lessonDates.includes(day)
-  
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      {/* 월 네비게이션 */}
-      <div className="flex items-center justify-between mb-4">
-        <button 
-          onClick={prevMonth}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <div className="font-bold text-gray-900">
-          {year}년 {month + 1}월
-        </div>
-        <button 
-          onClick={nextMonth}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-      
-      {/* 요일 */}
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {['일', '월', '화', '수', '목', '금', '토'].map((day, i) => (
-          <div 
-            key={day}
-            className={`
-              text-center text-xs font-bold py-2
-              ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'}
-            `}
-          >
-            {day}
-          </div>
-        ))}
-      </div>
-      
-      {/* 날짜 */}
-      <div className="grid grid-cols-7 gap-1">
-        {days.map((day, idx) => (
-          <div key={idx} className="aspect-square">
-            {day ? (
-              <button
-                onClick={() => selectDate(day)}
-                className={`
-                  w-full h-full rounded-lg text-sm font-medium transition-colors relative
-                  ${isSelected(day) 
-                    ? 'bg-blue-600 text-white' 
-                    : isToday(day)
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-700 hover:bg-gray-50'
-                  }
-                `}
-              >
-                {day}
-                {hasLesson(day) && (
-                  <div className={`
-                    absolute bottom-1 left-1/2 transform -translate-x-1/2
-                    w-1 h-1 rounded-full
-                    ${isSelected(day) ? 'bg-white' : 'bg-blue-600'}
-                  `} />
-                )}
-              </button>
-            ) : (
-              <div />
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// 레슨 카드
-function LessonCard({ lesson }: { lesson: Lesson }) {
-  const statusConfig = {
-    scheduled: { text: '예정', color: 'text-blue-600' },
-    completed: { text: '완료', color: 'text-gray-500' },
-    cancelled: { text: '취소', color: 'text-red-600' }
-  }
-
-  const attendanceConfig = {
-    true: { text: '출석 완료', color: 'bg-green-100 text-green-700' },
-    false: { text: '결석', color: 'bg-red-100 text-red-700' },
-    null: { text: '출석 대기', color: 'bg-blue-100 text-blue-700' }
-  }
-
-  const config = statusConfig[lesson.status]
-  const attendanceStatus = attendanceConfig[String(lesson.attended) as 'true' | 'false' | 'null']
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      {/* 헤더: 시간 + 상태 */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="font-bold text-gray-900">{lesson.time}</span>
-        </div>
-        <span className={`text-sm font-medium ${config.color}`}>
-          {config.text}
-        </span>
-      </div>
-
-      {/* 레슨 유형 + 결제 타입 */}
-      <div className="flex items-center gap-2 mb-3">
-        <StatusBadge type="class" value={lesson.classType} size="sm" />
-        <StatusBadge type="payment" value={lesson.paymentType} size="sm" />
-      </div>
-
-      {/* 강사 */}
-      <div className="flex items-center gap-2 mb-3">
-        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-        <span className="text-sm text-gray-600">{lesson.instructor}</span>
-      </div>
-
-      {/* 출석 상태 */}
-      {lesson.status === 'completed' && (
-        <div className={`
-          inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium
-          ${attendanceStatus.color}
-        `}>
-          {lesson.attended ? '✓' : '✗'} {attendanceStatus.text}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// 메인 컴포넌트
+// ==================== 메인 컴포넌트 ====================
 export default function MemberSchedulePage() {
-  const { profile } = useAuth()
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const router = useRouter()
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [calendarDate, setCalendarDate] = useState(new Date())
   const [lessons, setLessons] = useState<Lesson[]>([])
-  const [loading, setLoading] = useState(true)
+  const [weekScheduled, setWeekScheduled] = useState(0)
+  const [remainingSessions, setRemainingSessions] = useState(0)
+
+  const memberName = '홍길동' // 실제로는 로그인한 회원 이름
+
+  // 상태 텍스트
+  const statusText = {
+    scheduled: '예정',
+    completed: '완료'
+  }
+
+  // 레슨 타입 클래스
+  const getTypeClass = (type: string) => {
+    const classes = {
+      '인트로': 'bg-gray-400',
+      '개인레슨': 'bg-purple-500',
+      '듀엣레슨': 'bg-pink-500',
+      '그룹레슨': 'bg-orange-500'
+    }
+    return classes[type as keyof typeof classes] || 'bg-gray-400'
+  }
 
   useEffect(() => {
-    if (profile) {
-      loadLessons()
-    }
-  }, [profile, selectedDate])
+    loadLessons()
+  }, [currentDate])
 
+  // 레슨 데이터 로드
   const loadLessons = async () => {
-    try {
-      setLoading(true)
-      
-      // TODO: Supabase에서 데이터 로드
-      // 지금은 목 데이터
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      const mockLessons: Lesson[] = [
-        {
-          id: '1',
-          date: '2025-01-20',
-          time: '10:00',
-          classType: '개인레슨',
-          paymentType: '정규수업',
-          instructor: '김강사',
-          status: 'completed',
-          attended: true
-        },
-        {
-          id: '2',
-          date: '2025-01-20',
-          time: '14:00',
-          classType: '그룹레슨',
-          paymentType: '정규수업',
-          instructor: '이강사',
-          status: 'scheduled',
-          attended: null
-        }
-      ]
-      
-      setLessons(mockLessons)
-    } catch (error) {
-      console.error('❌ 레슨 로드 오류:', error)
-    } finally {
-      setLoading(false)
-    }
+    // TODO: Supabase에서 데이터 가져오기
+    const mockData: Lesson[] = [
+      {
+        id: '1',
+        time: '10:00',
+        type: '개인레슨',
+        room: 'A룸',
+        instructor: '김강사',
+        status: 'completed',
+        totalMembers: 1
+      },
+      {
+        id: '2',
+        time: '14:00',
+        type: '그룹레슨',
+        room: 'B룸',
+        instructor: '이강사',
+        status: 'scheduled',
+        totalMembers: 6
+      },
+      {
+        id: '3',
+        time: '19:00',
+        type: '그룹레슨',
+        room: 'A룸',
+        instructor: '박강사',
+        status: 'scheduled',
+        totalMembers: 4
+      }
+    ]
+    setLessons(mockData)
+    setWeekScheduled(3)
+    setRemainingSessions(12)
   }
 
-  // 선택된 날짜의 레슨 필터링
-  const selectedDateString = selectedDate.toISOString().split('T')[0]
-  const todayLessons = lessons.filter(lesson => lesson.date === selectedDateString)
+  // 캘린더 생성
+  const generateCalendar = () => {
+    const year = calendarDate.getFullYear()
+    const month = calendarDate.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const startDay = firstDay.getDay()
+    const daysInMonth = lastDay.getDate()
+    const today = new Date()
+    
+    // 회원의 레슨이 있는 날짜 (mock)
+    const sessionDays = [16, 18, 20, 22, 25, 27, 29]
 
-  // 레슨이 있는 날짜 추출 (캘린더 표시용)
-  const lessonDates = lessons
-    .filter(lesson => {
-      const lessonDate = new Date(lesson.date)
-      return (
-        lessonDate.getMonth() === selectedDate.getMonth() &&
-        lessonDate.getFullYear() === selectedDate.getFullYear()
+    const days = []
+    
+    // 빈 칸
+    for (let i = 0; i < startDay; i++) {
+      days.push(<div key={`empty-${i}`} className="aspect-square"></div>)
+    }
+    
+    // 날짜
+    for (let day = 1; day <= daysInMonth; day++) {
+      const isToday = 
+        day === today.getDate() && 
+        month === today.getMonth() && 
+        year === today.getFullYear()
+      
+      const isSelected = 
+        day === currentDate.getDate() && 
+        month === currentDate.getMonth() && 
+        year === currentDate.getFullYear()
+      
+      const hasSession = sessionDays.includes(day)
+      
+      days.push(
+        <div
+          key={day}
+          onClick={() => {
+            setCurrentDate(new Date(year, month, day))
+          }}
+          className={`
+            aspect-square flex items-center justify-center rounded-lg
+            text-sm font-medium cursor-pointer transition-all
+            ${isToday ? 'bg-[#f0ebe1] font-semibold' : ''}
+            ${isSelected ? 'bg-blue-600 text-white font-semibold' : 'text-gray-900'}
+            ${hasSession && !isSelected ? 'relative after:content-[""] after:absolute after:bottom-1 after:w-1 after:h-1 after:bg-blue-600 after:rounded-full' : ''}
+            ${!isSelected && !isToday ? 'hover:bg-[#f5f1e8]' : ''}
+          `}
+        >
+          {day}
+        </div>
       )
-    })
-    .map(lesson => new Date(lesson.date).getDate())
+    }
+    
+    return days
+  }
 
-  if (!profile) {
-    return <Loading text="로딩 중..." />
+  // 출석 체크
+  const checkAttendance = (id: string) => {
+    // TODO: 실제 출석 처리 로직
+    alert('출석 체크되었습니다!\n(실제로는 출석 확인 페이지로 이동하거나 QR 스캔)')
+    
+    const updatedLessons = lessons.map(lesson =>
+      lesson.id === id ? { ...lesson, status: 'completed' as const } : lesson
+    )
+    setLessons(updatedLessons)
+  }
+
+  // 날짜 포맷팅
+  const formatDate = (date: Date) => {
+    const month = date.getMonth() + 1
+    const day = date.getDate()
+    const weekdays = ['일', '월', '화', '수', '목', '금', '토']
+    const weekday = weekdays[date.getDay()]
+    return `${month}월 ${day}일 (${weekday})`
+  }
+
+  const formatFullDate = (date: Date) => {
+    return new Intl.DateTimeFormat('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long'
+    }).format(date)
   }
 
   return (
-    <>
-      <Header profile={profile} />
-      
-      <main className="pb-20 min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-          {/* 페이지 제목 */}
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">내 일정</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {selectedDate.toLocaleDateString('ko-KR', { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric',
-                weekday: 'long'
-              })}
-            </p>
+    <div className="min-h-screen bg-[#fdfbf7]">
+      {/* 메인 컨텐츠 */}
+      <div className="max-w-2xl mx-auto px-5 py-5 pb-24">
+        {/* 오늘의 요약 카드 */}
+        <div className="bg-white border border-[#f0ebe1] rounded-xl p-5 mb-4">
+          <div className="text-sm text-[#7a6f61] mb-2 font-medium">
+            {formatFullDate(new Date())}
           </div>
-
-          {/* 캘린더 */}
-          <Calendar 
-            value={selectedDate} 
-            onChange={setSelectedDate}
-            lessonDates={lessonDates}
-          />
-
-          {/* 레슨 목록 */}
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-4">
-              오늘의 레슨 {todayLessons.length > 0 && `(${todayLessons.length})`}
-            </h3>
-
-            {loading ? (
-              <Loading />
-            ) : todayLessons.length > 0 ? (
-              <div className="space-y-3">
-                {todayLessons.map(lesson => (
-                  <LessonCard key={lesson.id} lesson={lesson} />
-                ))}
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            오늘의 스케줄
+          </h2>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-lg p-4">
+              <div className="text-xs text-[#7a6f61] mb-1.5 font-medium">
+                이번 주 예정
               </div>
-            ) : (
-              <EmptyState
-                title="예정된 레슨이 없습니다"
-                description="선택하신 날짜에 예약된 레슨이 없습니다."
-              />
-            )}
+              <div className="text-2xl font-bold text-gray-900">
+                {weekScheduled}
+                <span className="text-sm font-medium text-[#7a6f61] ml-1">회</span>
+              </div>
+            </div>
+            
+            <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-lg p-4">
+              <div className="text-xs text-[#7a6f61] mb-1.5 font-medium">
+                잔여 레슨
+              </div>
+              <div className="text-2xl font-bold text-gray-900">
+                {remainingSessions}
+                <span className="text-sm font-medium text-[#7a6f61] ml-1">회</span>
+              </div>
+            </div>
           </div>
         </div>
-      </main>
 
-      <BottomNavigation profile={profile} />
-    </>
+        {/* 캘린더 카드 */}
+        <div className="bg-white border border-[#f0ebe1] rounded-xl p-5 mb-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-gray-900">
+              {calendarDate.getFullYear()}년 {calendarDate.getMonth() + 1}월
+            </h3>
+            
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  const newDate = new Date(calendarDate)
+                  newDate.setMonth(newDate.getMonth() - 1)
+                  setCalendarDate(newDate)
+                }}
+                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-all"
+              >
+                ←
+              </button>
+              
+              <button
+                onClick={() => {
+                  const newDate = new Date(calendarDate)
+                  newDate.setMonth(newDate.getMonth() + 1)
+                  setCalendarDate(newDate)
+                }}
+                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-all"
+              >
+                →
+              </button>
+            </div>
+          </div>
+          
+          {/* 요일 */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {['일', '월', '화', '수', '목', '금', '토'].map(day => (
+              <div
+                key={day}
+                className="text-center text-xs font-semibold text-[#9d917f] py-2"
+              >
+                {day}
+              </div>
+            ))}
+          </div>
+          
+          {/* 날짜 */}
+          <div className="grid grid-cols-7 gap-1">
+            {generateCalendar()}
+          </div>
+        </div>
+
+        {/* 레슨 목록 */}
+        <div className="bg-white border border-[#f0ebe1] rounded-xl p-5">
+          <h2 className="text-base font-semibold text-gray-900 mb-4">
+            {formatDate(currentDate)}
+          </h2>
+          
+          {lessons.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-4xl mb-3">📅</div>
+              <div className="text-sm text-[#7a6f61]">
+                예정된 레슨이 없습니다
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {lessons.map(lesson => {
+                // 참가자 정보
+                let participantsText = memberName
+                if (lesson.totalMembers > 1) {
+                  participantsText += ` 외 ${lesson.totalMembers - 1}명`
+                }
+                
+                return (
+                  <div
+                    key={lesson.id}
+                    className="border border-[#f0ebe1] rounded-lg p-4"
+                  >
+                    {/* 상단: 시간, 타입, 상태 */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {lesson.time}
+                      </div>
+                      <div className={`px-2.5 py-1 rounded-md text-xs font-medium text-white ${getTypeClass(lesson.type)}`}>
+                        {lesson.type}
+                      </div>
+                      <div className={`ml-auto px-2.5 py-1 rounded-md text-xs font-medium ${
+                        lesson.status === 'scheduled' 
+                          ? 'bg-blue-50 text-blue-600' 
+                          : 'bg-green-50 text-green-600'
+                      }`}>
+                        {statusText[lesson.status]}
+                      </div>
+                    </div>
+                    
+                    {/* 강사, 룸 */}
+                    <div className="text-xs text-[#7a6f61] mb-2">
+                      {lesson.instructor} · {lesson.room}
+                    </div>
+                    
+                    {/* 참가자 */}
+                    <div className="text-sm text-gray-900 mb-3">
+                      {participantsText}
+                    </div>
+                    
+                    {/* 액션 */}
+                    {lesson.status === 'completed' ? (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-50 text-green-600 text-sm font-medium">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        출석 완료
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => checkAttendance(lesson.id)}
+                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        출석 체크
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
