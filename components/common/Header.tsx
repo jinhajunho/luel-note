@@ -1,141 +1,165 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import type { Profile } from '@/types'
 
-interface HeaderProps {
-  profile: Profile
+type Profile = {
+  id: string
+  name: string
+  role: 'member' | 'instructor' | 'admin'
+  email: string
 }
 
-export default function Header({ profile }: HeaderProps) {
+export default function Header() {
   const router = useRouter()
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [isAdminMode, setIsAdminMode] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
-  const [adminMode, setAdminMode] = useState<'admin' | 'instructor'>('admin')
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(true)
 
-  // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    loadProfile()
   }, [])
 
-  // 관리자/강사 모드 전환
+  const loadProfile = async () => {
+    try {
+      setTimeout(() => {
+        setProfile({
+          id: '1',
+          name: '홍길동',
+          role: 'member',
+          email: 'hong@example.com'
+        })
+        setLoading(false)
+      }, 100)
+    } catch (error) {
+      console.error('프로필 로드 실패:', error)
+      setLoading(false)
+    }
+  }
+
   const toggleAdminMode = () => {
-    const newMode = adminMode === 'admin' ? 'instructor' : 'admin'
-    setAdminMode(newMode)
-    
-    // 실제 라우팅 (예시)
-    if (newMode === 'admin') {
+    setIsAdminMode(!isAdminMode)
+    if (!isAdminMode) {
       router.push('/admin/dashboard')
     } else {
       router.push('/instructor/dashboard')
     }
   }
 
-  // 로그아웃
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (confirm('로그아웃 하시겠습니까?')) {
       router.push('/login')
     }
   }
 
-  // 역할 텍스트
-  const getRoleText = () => {
-    if (profile.role === 'admin') {
-      return adminMode === 'admin' ? '관리자' : '강사 모드'
-    }
-    if (profile.role === 'instructor') return '강사'
-    return '회원'
+  if (loading || !profile) {
+    return (
+      <header className="bg-white border-b border-[#f0ebe1] px-5 py-4 sticky top-0 z-50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded bg-[#7EA1B3]" />
+            <span className="hidden sm:block text-lg font-semibold text-[#1a1a1a]">
+              LUEL NOTE
+            </span>
+          </div>
+        </div>
+      </header>
+    )
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-[#f0ebe1]">
-      <div className="max-w-7xl mx-auto px-5 py-4">
-        <div className="flex items-center justify-between">
-          {/* 로고 */}
-          <Link href="/dashboard" className="text-2xl font-bold text-[#7EA1B3] hover:text-[#6a91a3] transition-colors tracking-wide" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+    <header className="bg-white border-b border-[#f0ebe1] px-5 py-4 sticky top-0 z-50">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded bg-[#7EA1B3]" />
+          <span className="hidden sm:block text-lg font-semibold text-[#1a1a1a]">
             LUEL NOTE
-          </Link>
+          </span>
+        </div>
 
-          {/* 우측 액션 */}
-          <div className="flex items-center gap-2">
-            {/* 관리자 전환 버튼 (관리자만) */}
-            {profile.role === 'admin' && (
-              <button
-                onClick={toggleAdminMode}
-                className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                aria-label={`${adminMode === 'admin' ? '관리자' : '강사'} 모드`}
-              >
-                {adminMode === 'admin' ? '관리자' : '강사'}
-              </button>
-            )}
-
-            {/* 알림 아이콘 */}
+        <div className="flex items-center gap-2">
+          {profile.role === 'admin' && (
             <button
-              className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              aria-label="알림"
+              onClick={toggleAdminMode}
+              className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              {isAdminMode ? '강사' : '관리자'}
+            </button>
+          )}
+
+          <button className="relative w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors">
+            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+          </button>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="flex items-center gap-2 hover:bg-gray-100 rounded-lg px-2 py-1.5 transition-colors"
+            >
+              <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                <span className="text-sm font-medium text-gray-600">
+                  {profile.name[0]}
+                </span>
+              </div>
+              <svg 
+                className={`w-4 h-4 text-gray-600 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
-              {/* 알림 뱃지 */}
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
 
-            {/* 프로필 드롭다운 */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setShowDropdown(!showDropdown)}
-                className="flex items-center gap-2 p-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="프로필 메뉴"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                <svg
-                  className={`w-4 h-4 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {/* 드롭다운 메뉴 */}
-              {showDropdown && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-[#f0ebe1] py-1">
-                  {/* 사용자 정보 */}
+            {showDropdown && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setShowDropdown(false)}
+                />
+                
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-[#f0ebe1] rounded-xl shadow-lg z-50">
                   <div className="px-4 py-3 border-b border-[#f0ebe1]">
-                    <p className="text-sm font-semibold text-gray-900">{profile.name}</p>
-                    <p className="text-xs text-[#7a6f61] mt-1">{getRoleText()}</p>
+                    <div className="text-sm font-semibold text-[#1a1a1a] mb-1">
+                      {profile.name}
+                    </div>
+                    <div className="text-xs text-[#7a6f61]">
+                      {profile.role === 'admin' ? '관리자' : profile.role === 'instructor' ? '강사' : '회원'}
+                    </div>
                   </div>
 
-                  {/* 메뉴 */}
-                  <Link
-                    href="/profile"
-                    className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-[#f9f8f5] transition-colors"
-                    onClick={() => setShowDropdown(false)}
-                  >
-                    프로필 설정
-                  </Link>
-                  
                   <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    onClick={() => {
+                      setShowDropdown(false)
+                      router.push('/profile')
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f9f8f5] transition-colors text-sm text-[#1a1a1a]"
                   >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    프로필 설정
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowDropdown(false)
+                      handleLogout()
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-sm text-red-600 rounded-b-xl"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
                     로그아웃
                   </button>
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>
