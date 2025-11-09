@@ -1,566 +1,576 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { toggleAttendance, completeClass } from '@/lib/actions/attendance-actions'
-import { useAuth } from '@/contexts/AuthContext'
-import Loading from '@/components/common/Loading'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, Calendar, CheckCircle } from 'lucide-react'
+import { LessonStatusBadge, LessonTypeBadge } from '@/components/common/LessonBadges'
+import CalendarModal from '@/components/common/CalendarModal'
+import { useAuth } from '@/lib/auth-context'
+import { getAllClasses } from '@/app/actions/classes'
+import { formatInstructorName } from '@/lib/utils/text'
+import { usePathname, useRouter } from 'next/navigation'
+import { addSystemLog } from '@/lib/utils/system-log'
 
-// ==================== 타입 정의 ====================
 type TabType = 'today' | 'history'
+type LessonTypeName = '인트로' | '개인레슨' | '듀엣레슨' | '그룹레슨'
+type LessonStatusName = '예정' | '완료' | '취소'
 
-interface ClassSession {
-  id: string
-  time: string
-  classTypeName: string
-  classTypeColor: string
-  paymentTypeName: string
-  paymentTypeColor: string
-  members: MemberAttendance[]
-  completed: boolean
-}
-
-interface MemberAttendance {
+type LessonMember = {
   memberId: string
-  memberName: string
-  memberPhone: string
-  remainingLessons: number
-  totalLessons: number
+  name: string
+  phone?: string
+  remainingLessons: number | null
+  totalLessons: number | null
   attended: boolean | null
   checkInTime?: string
   hasPackage: boolean
-  packagePaymentType?: string
+  paymentType?: string
 }
 
-interface AttendanceHistory {
+interface Lesson {
   id: string
   date: string
-  time: string
-  classTypeName: string
-  classTypeColor: string
-  members: {
-    name: string
-    attended: boolean
-    checkInTime?: string
-  }[]
-  completed: boolean
-  totalAttended: number
-  totalAbsent: number
+  startTime: string
+  endTime: string
+  type: LessonTypeName
+  status: LessonStatusName
+  instructor?: string
+  instructorId?: string | null
+  paymentType: string
+  members: LessonMember[]
 }
 
-// ==================== 메인 컴포넌트 ====================
+const formatDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const formatDisplayDate = (dateStr: string) => {
+  const date = new Date(`${dateStr}T00:00:00`)
+  const weekdays = ['일', '월', '화', '수', '목', '금', '토']
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 (${weekdays[date.getDay()]})`
+}
+
+const formatCheckInTime = (iso?: string | null) => {
+  if (!iso) return undefined
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return undefined
+  return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(date)
+}
+
 export default function InstructorAttendancePage() {
-  const { profile } = useAuth()
+  const { profile, loading: authLoading } = useAuth()
+
   const [activeTab, setActiveTab] = useState<TabType>('today')
-  const [todaySessions, setTodaySessions] = useState<ClassSession[]>([])
-  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceHistory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
-  const [processing, setProcessing] = useState(false)
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false)
+  const [lessons, setLessons] = useState<Lesson[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
 
-  // 레슨 타입 색상
-  const classTypeColors: Record<string, string> = {
-    인트로: 'bg-gray-400',
-    개인레슨: 'bg-purple-500',
-    듀엣레슨: 'bg-pink-500',
-    그룹레슨: 'bg-orange-500',
-  }
+  const isInstructorContext =
+    profile?.role === 'instructor' || profile?.role === 'admin'
+  const instructorId = isInstructorContext && profile?.id ? profile.id : null
+  const instructorName = profile?.name ? formatInstructorName(profile.name) : ''
 
-  // 결제 타입 색상
-  const paymentTypeColors: Record<string, string> = {
-    체험수업: 'bg-amber-500',
-    정규수업: 'bg-blue-500',
-    강사제공: 'bg-emerald-500',
-    센터제공: 'bg-yellow-400',
-  }
+  const loadLessons = useCallback(async () => {
+    if (!instructorId) return
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await getAllClasses()
+      if (!result.success || !result.data) {
+        setLessons([])
+        if (result.error) {
+          setError(result.error)
+        }
+        return
+      }
 
-  // 오늘 날짜
-  const today = new Date()
-  const todayStr = `${today.getMonth() + 1}월 ${today.getDate()}일`
+      const mapped: Lesson[] = result.data
+        .filter((lesson) => lesson.instructorId === instructorId)
+        .map((lesson) => ({
+          id: lesson.id,
+          date: lesson.date,
+          startTime: lesson.startTime,
+          endTime: lesson.endTime,
+          type: lesson.type as LessonTypeName,
+          status: lesson.status as LessonStatusName,
+          instructor: instructorName,
+          instructorId: lesson.instructorId ?? null,
+          paymentType: lesson.paymentType,
+          members: lesson.members.map((member, index) => ({
+            memberId: member.memberId || `member-${lesson.id}-${index}`,
+            name: member.name,
+            phone: member.phone ?? undefined,
+            remainingLessons: member.remainingLessons ?? null,
+            totalLessons: member.totalLessons ?? null,
+            attended: member.attended ?? null,
+            checkInTime: formatCheckInTime(member.checkInTime),
+            hasPackage: Boolean(member.hasPackage),
+            paymentType: member.paymentType ?? lesson.paymentType,
+          })),
+        }))
 
-  // 데이터 로드
+      setLessons(mapped)
+    } catch (err) {
+      console.error('레슨 목록 로드 실패:', err)
+      setLessons([])
+      setError('레슨 데이터를 불러오는 중 문제가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [instructorId, instructorName])
+
   useEffect(() => {
-    if (profile && activeTab === 'today') {
-      loadTodaySessions()
-    } else if (profile && activeTab === 'history') {
-      loadAttendanceHistory()
-    }
-  }, [profile, activeTab, selectedDate])
-
-  const loadTodaySessions = async () => {
-    setLoading(true)
-    try {
-      // TODO: Supabase에서 오늘 담당 레슨 조회
-      // const today = new Date().toISOString().split('T')[0]
-      // const { data, error } = await supabase
-      //   .from('classes')
-      //   .select(`
-      //     *,
-      //     class_type:class_types(name, color),
-      //     payment_type:payment_types(name, color),
-      //     class_members(
-      //       *,
-      //       member:members(name, phone),
-      //       membership_package:membership_packages(
-      //         remaining_lessons, 
-      //         total_lessons,
-      //         payment_type_id
-      //       )
-      //     )
-      //   `)
-      //   .eq('date', today)
-      //   .eq('instructor_id', profile.phone)
-      //   .in('status', ['scheduled', 'ongoing'])
-      //   .order('time')
-
-      // 임시 목 데이터
-      const mockData: ClassSession[] = [
-        {
-          id: '1',
-          time: '10:00',
-          classTypeName: '개인레슨',
-          classTypeColor: 'bg-purple-500',
-          paymentTypeName: '정규수업',
-          paymentTypeColor: 'bg-blue-500',
-          completed: false,
-          members: [
-            {
-              memberId: 'm1',
-              memberName: '홍길동',
-              memberPhone: '010-1234-5678',
-              remainingLessons: 12,
-              totalLessons: 30,
-              attended: null,
-              hasPackage: true,
-              packagePaymentType: '정규수업'
-            },
-          ],
-        },
-        {
-          id: '2',
-          time: '14:00',
-          classTypeName: '그룹레슨',
-          classTypeColor: 'bg-orange-500',
-          paymentTypeName: '강사제공',
-          paymentTypeColor: 'bg-emerald-500',
-          completed: false,
-          members: [
-            {
-              memberId: 'm2',
-              memberName: '김철수',
-              memberPhone: '010-2222-3333',
-              remainingLessons: 7,
-              totalLessons: 20,
-              attended: null,
-              hasPackage: true,
-              packagePaymentType: '강사제공'
-            },
-            {
-              memberId: 'm3',
-              memberName: '이영희',
-              memberPhone: '010-4444-5555',
-              remainingLessons: 14,
-              totalLessons: 30,
-              attended: null,
-              hasPackage: true,
-              packagePaymentType: '강사제공'
-            },
-          ],
-        },
-      ]
-
-      setTodaySessions(mockData)
-    } catch (error) {
-      console.error('오늘 레슨 로드 실패:', error)
-      alert('레슨 정보를 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadAttendanceHistory = async () => {
-    setLoading(true)
-    try {
-      // TODO: Supabase에서 출석 기록 조회
-      // const { data, error } = await supabase
-      //   .from('classes')
-      //   .select(`
-      //     *,
-      //     class_type:class_types(name, color),
-      //     class_members(attended, check_in_time, member:members(name))
-      //   `)
-      //   .eq('instructor_id', profile.phone)
-      //   .eq('status', 'completed')
-      //   .gte('date', selectedDate)
-      //   .order('date', { ascending: false })
-      //   .order('time', { ascending: false })
-
-      // 임시 목 데이터
-      const mockData: AttendanceHistory[] = [
-        {
-          id: '1',
-          date: '2025-01-14',
-          time: '10:00',
-          classTypeName: '개인레슨',
-          classTypeColor: 'bg-purple-500',
-          completed: true,
-          totalAttended: 1,
-          totalAbsent: 0,
-          members: [
-            {
-              name: '홍길동',
-              attended: true,
-              checkInTime: '10:05',
-            },
-          ],
-        },
-      ]
-
-      setAttendanceHistory(mockData)
-    } catch (error) {
-      console.error('출석 기록 로드 실패:', error)
-      alert('출석 기록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // 출석 토글
-  const handleToggleAttendance = async (sessionId: string, memberId: string, memberName: string, hasPackage: boolean) => {
-    const session = todaySessions.find(s => s.id === sessionId)
-    const member = session?.members.find(m => m.memberId === memberId)
-    
-    if (!hasPackage && member?.attended !== true) {
-      alert(`${memberName} 회원은 사용 가능한 회원권이 없습니다.\n관리자에게 회원권 등록을 요청하세요.`)
+    if (authLoading) return
+    if (!profile || !isInstructorContext) {
+      setLessons([])
+      setError('강사 전용 페이지입니다.')
       return
     }
+    loadLessons()
+  }, [authLoading, profile, isInstructorContext, loadLessons])
 
-    setProcessing(true)
+  const todayKey = formatDateKey(new Date())
+  const selectedDateKey = formatDateKey(selectedDate)
 
-    try {
-      const result = await toggleAttendance(sessionId, memberId, member?.attended || null)
-      
-      if (!result.success) {
-        alert(result.message)
-        return
-      }
+  const todayLessons = useMemo(
+    () => lessons.filter((lesson) => lesson.date === todayKey),
+    [lessons, todayKey]
+  )
+  const historyLessons = useMemo(
+    () => lessons.filter((lesson) => lesson.date === selectedDateKey),
+    [lessons, selectedDateKey]
+  )
 
-      // UI 업데이트
-      setTodaySessions((prev) =>
-        prev.map((session) => {
-          if (session.id === sessionId) {
-            return {
-              ...session,
-              members: session.members.map((m) => {
-                if (m.memberId === memberId) {
-                  const newAttended = m.attended === null ? true : m.attended ? false : true
-                  return {
-                    ...m,
-                    attended: newAttended,
-                    checkInTime: newAttended ? new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : undefined,
-                    remainingLessons: newAttended && m.hasPackage ? m.remainingLessons - 1 : m.remainingLessons
-                  }
-                }
-                return m
-              }),
-            }
-          }
-          return session
+  const selectedLesson = useMemo(
+    () => lessons.find((lesson) => lesson.id === selectedLessonId) ?? null,
+    [lessons, selectedLessonId]
+  )
+
+  const currentLessons = activeTab === 'today' ? todayLessons : historyLessons
+
+  const changeDate = (days: number) => {
+    const newDate = new Date(selectedDate)
+    newDate.setDate(newDate.getDate() + days)
+    setSelectedDate(newDate)
+  }
+
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date)
+    setCalendarModalOpen(false)
+  }
+
+  const openModal = (lessonId: string) => {
+    setSelectedLessonId(lessonId)
+    document.body.style.overflow = 'hidden'
+  }
+
+  const closeModal = () => {
+    setSelectedLessonId(null)
+    document.body.style.overflow = ''
+  }
+
+  const handleToggleAttendance = useCallback(
+    async (lessonId: string, memberId: string) => {
+      if (actionLoading) return
+      const lesson = lessons.find((l) => l.id === lessonId)
+      const member = lesson?.members.find((m) => m.memberId === memberId)
+      if (!lesson || !member) return
+
+      try {
+        setActionLoading(true)
+        const actions = await import('@/lib/actions/attendance-actions')
+        const result = await actions.toggleAttendance(lessonId, memberId, member.attended ?? null, {
+          actor: 'instructor',
         })
-      )
+        if (!result.success) {
+          alert(result.message)
+          return
+        }
+        await loadLessons()
+      } catch (err) {
+        console.error('출석 처리 실패:', err)
+        alert('출석 처리 중 오류가 발생했습니다.')
+      } finally {
+        setActionLoading(false)
+      }
+    },
+    [lessons, loadLessons, actionLoading]
+  )
 
-      alert(result.message)
+  const handleCompleteLesson = useCallback(
+    async (lessonId: string) => {
+      if (actionLoading) return
+      const lesson = lessons.find((l) => l.id === lessonId)
+      try {
+        setActionLoading(true)
+        const actions = await import('@/lib/actions/attendance-actions')
+        const result = await actions.completeClass(lessonId)
+        if (!result.success) {
+          alert(result.message)
+          return
+        }
+        if (lesson) {
+          addSystemLog({
+            type: 'data_change',
+            user: profile?.name || instructorName,
+            action: '레슨 완료 처리',
+            details: `일자: ${lesson.date}, 시간: ${lesson.startTime}~${lesson.endTime}, 강사: ${instructorName}, 참여자: ${lesson.members
+              .map((m) => m.name)
+              .join(', ') || '없음'}`,
+          })
+        }
+        closeModal()
+        await loadLessons()
+      } catch (err) {
+        console.error('레슨 완료 처리 실패:', err)
+        alert('레슨 완료 처리 중 오류가 발생했습니다.')
+      } finally {
+        setActionLoading(false)
+      }
+    },
+    [loadLessons, actionLoading, lessons, instructorName, profile?.name]
+  )
 
-    } catch (error) {
-      console.error('출석 처리 오류:', error)
-      alert('출석 처리 중 오류가 발생했습니다.')
-    } finally {
-      setProcessing(false)
+  const handleCancelLesson = useCallback(
+    async (lessonId: string) => {
+      if (actionLoading) return
+      const lesson = lessons.find((l) => l.id === lessonId)
+      try {
+        const confirmMessage = lesson?.status === '완료'
+          ? '레슨 완료 상태를 취소하시겠습니까?'
+          : '레슨을 취소하시겠습니까? 참석한 회원의 출석 기록이 초기화됩니다.'
+        if (!confirm(confirmMessage)) {
+          return
+        }
+        setActionLoading(true)
+        const actions = await import('@/lib/actions/attendance-actions')
+        const result = await actions.cancelClass(lessonId)
+        if (!result.success) {
+          alert(result.message)
+          return
+        }
+        if (lesson) {
+          const actionLabel = result.nextStatus === 'scheduled' ? '레슨 완료 취소' : '레슨 취소'
+          addSystemLog({
+            type: 'data_change',
+            user: profile?.name || instructorName,
+            action: actionLabel,
+            details: `일자: ${lesson.date}, 시간: ${lesson.startTime}~${lesson.endTime}, 강사: ${instructorName}, 참여자: ${lesson.members
+              .map((m) => m.name)
+              .join(', ') || '없음'}\n결과: ${result.message}`,
+          })
+        }
+        closeModal()
+        await loadLessons()
+      } catch (err) {
+        console.error('레슨 취소 처리 실패:', err)
+        alert('레슨 취소 처리 중 오류가 발생했습니다.')
+      } finally {
+        setActionLoading(false)
+      }
+    },
+    [actionLoading, lessons, instructorName, profile?.name, loadLessons]
+  )
+
+  useEffect(() => {
+    if (activeTab === 'today') {
+      setSelectedDate(new Date())
     }
+  }, [activeTab])
+
+  if (authLoading) {
+    return (
+      <div className="px-5 py-10 text-center text-sm text-[#7a6f61]">
+        정보를 불러오는 중입니다...
+      </div>
+    )
   }
 
-  // 레슨 완료
-  const handleCompleteSession = async (sessionId: string) => {
-    const session = todaySessions.find((s) => s.id === sessionId)
-    if (!session) return
-
-    const hasUnmarked = session.members.some((m) => m.attended === null)
-    if (hasUnmarked) {
-      if (!confirm('아직 체크하지 않은 회원이 있습니다.\n체크하지 않은 회원은 자동으로 결석 처리됩니다.\n레슨을 완료하시겠습니까?')) {
-        return
-      }
-    }
-
-    setProcessing(true)
-
-    try {
-      const result = await completeClass(sessionId)
-      
-      if (!result.success) {
-        alert(result.message)
-        return
-      }
-
-      alert(result.message)
-      await loadTodaySessions()
-
-    } catch (error) {
-      console.error('레슨 완료 실패:', error)
-      alert('레슨 완료에 실패했습니다.')
-    } finally {
-      setProcessing(false)
-    }
+  if (!profile || !isInstructorContext) {
+    return (
+      <div className="px-5 py-10 text-center text-sm text-[#7a6f61]">
+        강사 전용 페이지입니다.
+      </div>
+    )
   }
+
+  const todayLabel = formatDisplayDate(todayKey)
 
   return (
-    <div className="min-h-screen bg-[#fdfbf7]">
-      {/* 헤더 */}
-      <div className="bg-white border-b border-[#f0ebe1] sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gray-900">출석 관리</h1>
-            <span className="px-3 py-1 bg-[#8b5cf6] text-white text-sm font-semibold rounded-full">
-              강사
+    <div className="pb-24 overflow-x-hidden">
+      <div className="bg-white border-x-0 border-t border-[#f0ebe1] border-b border-[#f0ebe1] rounded-none px-4 py-2 shadow-sm min-h-[56px] flex items-center">
+        {activeTab === 'today' ? (
+          <div className="flex items-center justify-center w-full">
+            <span className="text-sm font-semibold text-[#1a1a1a]">
+              {todayLabel}
             </span>
           </div>
-          <div className="text-sm text-gray-600 font-medium">
-            {todayStr}
-          </div>
-        </div>
-      </div>
-
-      {/* 탭 메뉴 */}
-      <div className="bg-white border-b border-[#f0ebe1]">
-        <div className="max-w-7xl mx-auto px-4 flex">
-          <button
-            onClick={() => setActiveTab('today')}
-            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === 'today'
-                ? 'border-[#8b5cf6] text-[#8b5cf6]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            오늘 레슨
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === 'history'
-                ? 'border-[#8b5cf6] text-[#8b5cf6]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            출석 기록
-          </button>
-        </div>
-      </div>
-
-      {/* 메인 컨텐츠 */}
-      <div className="max-w-7xl mx-auto p-4">
-        {/* ==================== 오늘 레슨 탭 ==================== */}
-        {activeTab === 'today' && (
-          <div className="space-y-4">
-            {loading ? (
-              <Loading />
-            ) : todaySessions.length === 0 ? (
-              <div className="bg-white rounded-xl border border-[#f0ebe1] p-12 text-center">
-                <div className="text-5xl mb-4">📅</div>
-                <div className="text-lg font-semibold text-gray-900 mb-2">
-                  오늘 예정된 레슨이 없습니다
-                </div>
-                <div className="text-sm text-gray-600">
-                  편안한 하루 보내세요!
-                </div>
-              </div>
-            ) : (
-              todaySessions.map((session) => (
-                <div key={session.id} className="bg-white rounded-xl border border-[#f0ebe1] p-4">
-                  {/* 레슨 헤더 */}
-                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#f5f1e8]">
-                    <div className="flex items-center gap-3">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {session.time}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 ${session.classTypeColor} text-white text-sm font-semibold rounded-lg`}>
-                          {session.classTypeName}
-                        </span>
-                        <span className={`px-3 py-1 ${session.paymentTypeColor} text-white text-sm font-semibold rounded-lg`}>
-                          {session.paymentTypeName}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {session.members.length}명
-                    </div>
-                  </div>
-
-                  {/* 회원 목록 */}
-                  <div className="space-y-2 mb-4">
-                    {session.members.map((member) => (
-                      <div
-                        key={member.memberId}
-                        onClick={() => !session.completed && !processing && handleToggleAttendance(session.id, member.memberId, member.memberName, member.hasPackage)}
-                        className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all ${
-                          session.completed
-                            ? 'opacity-60 cursor-not-allowed'
-                            : processing
-                            ? 'opacity-60 cursor-wait'
-                            : member.attended === true
-                            ? 'bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
-                            : member.attended === false
-                            ? 'bg-red-50 border border-red-200 hover:bg-red-100'
-                            : !member.hasPackage
-                            ? 'bg-gray-100 border border-gray-300'
-                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
-                        }`}
-                      >
-                        {/* 체크박스 */}
-                        <div
-                          className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 ${
-                            member.attended === true
-                              ? 'bg-emerald-500 border-emerald-500'
-                              : member.attended === false
-                              ? 'bg-red-500 border-red-500'
-                              : !member.hasPackage
-                              ? 'bg-gray-300 border-gray-400'
-                              : 'border-gray-300'
-                          }`}
-                        >
-                          {member.attended === true && (
-                            <span className="text-white text-sm font-bold">✓</span>
-                          )}
-                          {member.attended === false && (
-                            <span className="text-white text-sm font-bold">✗</span>
-                          )}
-                          {!member.hasPackage && (
-                            <span className="text-gray-600 text-xs font-bold">!</span>
-                          )}
-                        </div>
-
-                        {/* 회원 정보 */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-gray-900">
-                              {member.memberName}
-                            </span>
-                            {!member.hasPackage && (
-                              <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded">
-                                회원권 없음
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-600 mt-0.5">
-                            {member.hasPackage ? (
-                              <>회원권 {member.remainingLessons}/{member.totalLessons}</>
-                            ) : (
-                              <>{member.packagePaymentType || session.paymentTypeName} 회원권 필요</>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 출석 시간 */}
-                        {member.attended === true && member.checkInTime && (
-                          <div className="text-xs font-semibold text-emerald-600">
-                            {member.checkInTime}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 완료 버튼 */}
-                  {!session.completed && (
-                    <button
-                      onClick={() => handleCompleteSession(session.id)}
-                      disabled={processing}
-                      className={`w-full py-3 bg-[#8b5cf6] text-white font-semibold rounded-xl transition-colors ${
-                        processing ? 'opacity-60 cursor-wait' : 'hover:bg-[#7c3aed]'
-                      }`}
-                    >
-                      {processing ? '처리 중...' : '레슨 완료'}
-                    </button>
-                  )}
-
-                  {session.completed && (
-                    <div className="w-full py-3 bg-gray-100 text-gray-500 font-semibold rounded-xl text-center">
-                      ✓ 완료된 레슨
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
+        ) : (
+          <div className="flex items-center justify-between w-full">
+            <button
+              onClick={() => changeDate(-1)}
+              className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCalendarModalOpen(true)}
+              className="flex-1 mx-4 flex items-center justify-center gap-2 px-4 py-2 border border-[#f0ebe1] rounded-lg hover:border-blue-300 transition-colors"
+            >
+              <Calendar className="w-4 h-4 text-[#7a6f61]" />
+              <span className="text-sm font-semibold text-[#1a1a1a]">
+                {formatDisplayDate(selectedDateKey)}
+              </span>
+            </button>
+            <button
+              onClick={() => changeDate(1)}
+              className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         )}
+      </div>
 
-        {/* ==================== 기록 탭 ==================== */}
-        {activeTab === 'history' && (
-          <div className="space-y-3">
-            {loading ? (
-              <Loading />
-            ) : attendanceHistory.length === 0 ? (
-              <div className="bg-white rounded-xl border border-[#f0ebe1] p-12 text-center">
-                <div className="text-5xl mb-4">📋</div>
-                <div className="text-lg font-semibold text-gray-900 mb-2">
-                  출석 기록이 없습니다
+    <div className="bg-white border-b border-[#f0ebe1] px-5 shadow-sm">
+      <div className="flex">
+        <button
+          onClick={() => {
+            setActiveTab('today')
+            setSelectedLessonId(null)
+          }}
+          className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === 'today'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          오늘 레슨
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('history')
+            setSelectedLessonId(null)
+          }}
+          className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === 'history'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          출석 기록
+        </button>
+      </div>
+    </div>
+
+    <div className="space-y-3 px-5 py-6 max-h-[calc(100vh-260px)] overflow-y-auto">
+      {loading ? (
+        <div className="bg-white border border-[#f0ebe1] rounded-lg p-12 text-center text-sm text-[#7a6f61]">
+          레슨을 불러오는 중입니다...
+        </div>
+      ) : error ? (
+        <div className="bg-white border border-red-200 rounded-lg p-12 text-center text-sm text-red-600">
+          {error}
+        </div>
+      ) : currentLessons.length === 0 ? (
+        <div className="bg-white border border-[#f0ebe1] rounded-lg p-12 text-center">
+          <div className="text-5xl mb-4">📅</div>
+          <div className="text-lg font-semibold text-gray-900 mb-2">
+            {activeTab === 'today' ? '오늘 예정된 레슨이 없습니다' : '선택한 날짜에 기록이 없습니다'}
+          </div>
+        </div>
+      ) : (
+        currentLessons.map((lesson) => (
+          <div
+            key={lesson.id}
+            onClick={() => openModal(lesson.id)}
+            className="bg-white border border-[#f0ebe1] rounded-lg p-4 cursor-pointer hover:border-blue-300 transition-colors"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm font-medium text-[#7a6f61]">
+                {formatDisplayDate(lesson.date)}
+              </span>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#1a1a1a]">
+                <span>{lesson.startTime} - {lesson.endTime}</span>
+              </div>
+              {lesson.members.some((m) => m.attended === true) && (
+                <div className="ml-auto text-green-600 flex items-center">
+                  <CheckCircle className="w-4 h-4" />
                 </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <LessonTypeBadge type={lesson.type} />
+              <LessonStatusBadge status={lesson.status} />
+              <span className="text-xs text-[#7a6f61]">{lesson.paymentType}</span>
+            </div>
+            {lesson.members.length > 0 && (
+              <p className="text-sm text-[#7a6f61]">
+                참여 회원: {lesson.members.map((m) => m.name).join(', ')}
+              </p>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+
+    <CalendarModal
+      isOpen={calendarModalOpen}
+      onClose={() => setCalendarModalOpen(false)}
+      selectedDate={selectedDate}
+      onSelectDate={handleDateSelect}
+      lessonDates={[...new Set(lessons.map((lesson) => lesson.date))]}
+    />
+
+    {selectedLesson && (
+      <div
+        className="fixed inset-0 z-[2000] flex items-center justify-center p-5 bg-black/50"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) closeModal()
+        }}
+      >
+        <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-[#f0ebe1]">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {selectedLesson.startTime} - {selectedLesson.endTime} · {selectedLesson.type}
+            </h2>
+            <button
+              onClick={closeModal}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+              aria-label="닫기"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex border-b border-[#f0ebe1]">
+            <button className="px-4 py-2 text-sm font-semibold text-blue-600 border-b-2 border-blue-600">
+              출석 체크
+            </button>
+          </div>
+          <div className="overflow-y-auto flex-1 p-4 space-y-3">
+            {selectedLesson.members.length === 0 ? (
+              <div className="text-center py-8 text-[#7a6f61]">
+                <p className="text-sm">참여 회원이 없습니다</p>
+                {selectedLesson.type === '인트로' && (
+                  <p className="text-xs mt-2 text-[#7a6f61]">인트로 레슨은 회원 없이 진행됩니다</p>
+                )}
               </div>
             ) : (
-              attendanceHistory.map((record) => (
-                <div key={record.id} className="bg-white rounded-xl border border-[#f0ebe1] p-4">
-                  {/* 레슨 정보 */}
-                  <div className="flex items-center justify-between mb-3 pb-3 border-b border-[#f5f1e8]">
-                    <div className="flex items-center gap-3">
-                      <div className="text-sm font-semibold text-gray-900">
-                        {record.date} {record.time}
-                      </div>
-                      <span className={`px-2 py-1 ${record.classTypeColor} text-white text-xs font-semibold rounded-lg`}>
-                        {record.classTypeName}
-                      </span>
-                    </div>
-                  </div>
+              selectedLesson.members.map((member, idx) => {
+                const isPresent = member.attended === true
+                const isAbsent = member.attended === false
+                const isUnchecked = member.attended === null
 
-                  {/* 출석 현황 */}
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                      <span className="text-sm text-gray-700">
-                        출석 <span className="font-semibold text-gray-900">{record.totalAttended}명</span>
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                      <span className="text-sm text-gray-700">
-                        결석 <span className="font-semibold text-gray-900">{record.totalAbsent}명</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 회원 목록 */}
-                  <div className="flex flex-wrap gap-2">
-                    {record.members.map((member, idx) => (
-                      <div
-                        key={idx}
-                        className={`px-3 py-1.5 rounded-lg text-sm ${
-                          member.attended
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-red-50 text-red-700 border border-red-200'
-                        }`}
-                      >
-                        {member.name}
-                        {member.attended && member.checkInTime && (
-                          <span className="ml-2 text-xs opacity-70">
-                            {member.checkInTime}
+                return (
+                  <div
+                    key={member.memberId || `member-${idx}`}
+                    className="flex items-center justify-between p-3 border border-[#f0ebe1] rounded-lg bg-white"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[#1a1a1a] font-medium">{member.name}</span>
+                        {!member.hasPackage && (
+                          <span className="px-2 py-0.5 bg-red-50 text-red-700 text-xs font-semibold rounded">
+                            회원권 없음
+                          </span>
+                        )}
+                        {isPresent && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+                            출석 완료
+                          </span>
+                        )}
+                        {isAbsent && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-700">
+                            결석
                           </span>
                         )}
                       </div>
-                    ))}
+                      {member.checkInTime && (
+                        <div className="text-xs text-green-600 mt-1">출석: {member.checkInTime}</div>
+                      )}
+                      {member.remainingLessons !== null && member.totalLessons !== null && (
+                        <div className="text-xs text-[#7a6f61] mt-1">
+                          잔여 {member.remainingLessons}회 / 총 {member.totalLessons}회
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 ml-3">
+                      {selectedLesson.status === '예정' && activeTab === 'today' && (
+                        <button
+                          disabled={actionLoading}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (!member.hasPackage && isUnchecked) {
+                              if (!confirm(`${member.name} 회원은 사용 가능한 회원권이 없습니다.\n출석 체크하시겠습니까?`)) {
+                                return
+                              }
+                            }
+                            handleToggleAttendance(selectedLesson.id, member.memberId)
+                          }}
+                          className={`px-3 py-2 text-sm min-h-[36px] font-semibold rounded-lg transition-colors ${
+                            isPresent
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                              : isUnchecked
+                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              : 'bg-red-100 text-red-700 hover:bg-red-200'
+                          } ${actionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          {isPresent ? '출석 취소' : isUnchecked ? '출석 체크' : '결석 취소'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
-        )}
+          {selectedLesson.status !== '취소' && (
+            <div className="p-4 border-t border-[#f0ebe1] space-y-2">
+              {selectedLesson.status !== '완료' && (
+                <button
+                  disabled={actionLoading}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const hasUnchecked = selectedLesson.members.some((m) => m.attended === null)
+                    if (hasUnchecked && !confirm('아직 체크하지 않은 회원이 있습니다.\n체크하지 않은 회원은 자동으로 결석 처리됩니다.\n레슨을 완료하시겠습니까?')) {
+                      return
+                    }
+                    handleCompleteLesson(selectedLesson.id)
+                  }}
+                  className={`w-full py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors ${
+                    actionLoading ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
+                >
+                  레슨 완료
+                </button>
+              )}
+              <button
+                disabled={actionLoading}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleCancelLesson(selectedLesson.id)
+                }}
+                className={`w-full py-3 ${
+                  selectedLesson.status === '완료'
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-red-100 text-red-600 hover:bg-red-200'
+                } text-sm font-semibold rounded-lg transition-colors ${
+                  actionLoading ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
+              >
+                {selectedLesson.status === '완료' ? '레슨 완료 취소' : '레슨 취소'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+    )}
+
+
     </div>
   )
 }

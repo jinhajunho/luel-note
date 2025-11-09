@@ -18,32 +18,28 @@ export function usePermissions() {
   const isAdmin = profile?.role === 'admin';
   const isInstructor = profile?.role === 'instructor';
   const isMember = profile?.role === 'member';
+  const isGuest = profile?.role === 'guest';
 
   // 회원의 경우 회원권 체크
   useEffect(() => {
-    if (isMember && profile?.phone) {
+    if (isMember && profile?.id) {
       checkMemberPass();
     }
-  }, [isMember, profile?.phone]);
+  }, [isMember, profile?.id]);
 
   const checkMemberPass = async () => {
-    if (!profile?.phone) return;
+    if (!profile?.id) return;
 
     setCheckingPass(true);
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/check_member_has_passes`,
-        {
-          method: 'POST',
-          headers: {
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ member_phone: profile.phone })
-        }
-      );
-      const hasPass = await response.json();
-      setHasMemberPass(hasPass === true);
+      const response = await fetch(`/api/member/${profile.id}/has-pass`, {
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load pass status: ${response.status}`);
+      }
+      const data: { hasPass?: boolean } = await response.json();
+      setHasMemberPass(data.hasPass ?? false);
     } catch (error) {
       console.error('회원권 체크 오류:', error);
       setHasMemberPass(false);
@@ -65,7 +61,7 @@ export function usePermissions() {
     if (isAdmin) return true;
 
     // 회원은 회원관리, 수업 메뉴 접근 불가
-    if (isMember && (menuKey === 'members' || menuKey === 'classes')) {
+    if ((isMember || isGuest) && (menuKey === 'members' || menuKey === 'classes')) {
       return false;
     }
 
@@ -87,7 +83,7 @@ export function usePermissions() {
     deleteClass: isAdmin || isInstructor,
     
     // 출석 관리
-    checkAttendance: isAdmin || isInstructor || isMember,
+    checkAttendance: isAdmin || isInstructor || isMember || isGuest,
     updateAttendance: isAdmin || isInstructor,
     deleteAttendance: isAdmin || isInstructor,
     
@@ -112,6 +108,7 @@ export function usePermissions() {
     isAdmin,
     isInstructor,
     isMember,
+    isGuest,
     hasMemberPass,
     checkingPass,
     canAccessMenu,

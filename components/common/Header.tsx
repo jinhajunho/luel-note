@@ -1,68 +1,46 @@
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-
-type Profile = {
-  id: string
-  name: string
-  role: 'member' | 'instructor' | 'admin'
-  email: string
-}
+import { useAuth } from '@/lib/auth-context'
 
 export default function Header() {
   const router = useRouter()
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const { profile, loading, signOut } = useAuth()
   const [isAdminMode, setIsAdminMode] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    loadProfile()
-  }, [])
-
-  const loadProfile = async () => {
-    try {
-      setTimeout(() => {
-        setProfile({
-          id: '1',
-          name: '홍길동',
-          role: 'member',
-          email: 'hong@example.com'
-        })
-        setLoading(false)
-      }, 100)
-    } catch (error) {
-      console.error('프로필 로드 실패:', error)
-      setLoading(false)
-    }
-  }
 
   const toggleAdminMode = () => {
     setIsAdminMode(!isAdminMode)
     if (!isAdminMode) {
-      router.push('/admin/dashboard')
+      router.push('/admin/schedule')
     } else {
-      router.push('/instructor/dashboard')
+      router.push('/instructor/schedule')
     }
   }
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     if (confirm('로그아웃 하시겠습니까?')) {
+      await signOut()
       router.push('/login')
     }
-  }
+  }, [router, signOut])
+
+  const renderLogo = () => (
+    <div className="flex items-center gap-2">
+      <div className="w-6 h-6 rounded bg-[#7EA1B3]" />
+      <span className="hidden sm:block text-lg font-semibold text-[#1a1a1a]">
+        LUEL NOTE
+      </span>
+    </div>
+  )
 
   if (loading || !profile) {
     return (
       <header className="bg-white border-b border-[#f0ebe1] px-5 py-4 sticky top-0 z-50">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-[#7EA1B3]" />
-            <span className="hidden sm:block text-lg font-semibold text-[#1a1a1a]">
-              LUEL NOTE
-            </span>
-          </div>
+          {renderLogo()}
         </div>
       </header>
     )
@@ -71,12 +49,7 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-[#f0ebe1] px-5 py-4 sticky top-0 z-50">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-[#7EA1B3]" />
-          <span className="hidden sm:block text-lg font-semibold text-[#1a1a1a]">
-            LUEL NOTE
-          </span>
-        </div>
+        {renderLogo()}
 
         <div className="flex items-center gap-2">
           {profile.role === 'admin' && (
@@ -88,7 +61,7 @@ export default function Header() {
             </button>
           )}
 
-          <button className="relative w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors">
+          <button className="relative w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors" aria-label="알림">
             <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
@@ -99,6 +72,9 @@ export default function Header() {
             <button
               onClick={() => setShowDropdown(!showDropdown)}
               className="flex items-center gap-2 hover:bg-gray-100 rounded-lg px-2 py-1.5 transition-colors"
+              aria-haspopup="menu"
+              aria-expanded={showDropdown}
+              aria-controls="profile-menu"
             >
               <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
                 <span className="text-sm font-medium text-gray-600">
@@ -122,7 +98,7 @@ export default function Header() {
                   onClick={() => setShowDropdown(false)}
                 />
                 
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-[#f0ebe1] rounded-xl shadow-lg z-50">
+                <div id="profile-menu" role="menu" className="absolute right-0 top-full mt-2 w-56 bg-white border border-[#f0ebe1] rounded-xl shadow-lg z-50">
                   <div className="px-4 py-3 border-b border-[#f0ebe1]">
                     <div className="text-sm font-semibold text-[#1a1a1a] mb-1">
                       {profile.name}

@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authId            String             @map("auth_id") @db.Uuid
+  phone             String             @unique @db.VarChar(20)
+  name              String             @db.VarChar(100)
+  role              String?            @db.VarChar(20)
+  birthDate         DateTime?          @map("birth_date") @db.Date
+  gender            String?            @db.VarChar(10)
+  createdAt         DateTime?          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime?          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  classes           Class[]            @relation("InstructorClasses")
+  instructorMembers InstructorMember[] @relation("InstructorProfile")
+  settlements       Settlement[]
+  userPermissions   UserPermission[]
+  notices           Notice[]
+  notifications     Notification[]
+
+  @@index([authId], map: "idx_profiles_auth_id")
+  @@index([phone], map: "idx_profiles_phone")
+  @@index([role], map: "idx_profiles_role")
+  @@map("profiles")
+}
+
+model Member {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId          String              @map("profile_id") @db.Uuid
+  phone              String              @unique @db.VarChar(20)
+  name               String              @db.VarChar(100)
+  type               String?             @default("guest") @db.VarChar(20)
+  status             String?             @default("active") @db.VarChar(20)
+  joinDate           DateTime?           @default(dbgenerated("CURRENT_DATE")) @map("join_date") @db.Date
+  createdAt          DateTime?           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime?           @default(now()) @map("updated_at") @db.Timestamptz(6)
+  classMembers       ClassMember[]
+  instructorMembers  InstructorMember[]
+  membershipPackages MembershipPackage[]
+
+  @@index([profileId], map: "idx_members_profile_id")
+  @@index([type], map: "idx_members_type")
+  @@index([status], map: "idx_members_status")
+  @@index([phone], map: "idx_members_phone")
+  @@map("members")
+}
+
+model ClassType {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String       @unique @db.VarChar(50)
+  maxMembers  Int          @default(1) @map("max_members")
+  color       String?      @default("gray") @db.VarChar(20)
+  createdAt   DateTime?    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime?    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  classes     Class[]
+  settlements Settlement[]
+
+  @@map("class_types")
+}
+
+model PaymentType {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String              @unique @db.VarChar(50)
+  color              String?             @default("gray") @db.VarChar(20)
+  createdAt          DateTime?           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime?           @default(now()) @map("updated_at") @db.Timestamptz(6)
+  classes            Class[]
+  membershipPackages MembershipPackage[]
+  settlements        Settlement[]
+
+  @@map("payment_types")
+}
+
+model Class {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  classTypeId   String?       @map("class_type_id") @db.Uuid
+  date          DateTime      @db.Date
+  time          DateTime      @map("time") @db.Time(6)
+  startTime     DateTime      @map("start_time") @db.Time(6)
+  endTime       DateTime      @map("end_time") @db.Time(6)
+  instructorId  String?       @map("instructor_id") @db.Uuid
+  paymentTypeId String?       @map("payment_type_id") @db.Uuid
+  status        String?       @default("scheduled") @db.VarChar(20)
+  createdAt     DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime?     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  classMembers  ClassMember[]
+  classType     ClassType?    @relation(fields: [classTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  instructor    Profile?      @relation("InstructorClasses", fields: [instructorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  paymentType   PaymentType?  @relation(fields: [paymentTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([date], map: "idx_classes_date")
+  @@index([instructorId], map: "idx_classes_instructor_id")
+  @@index([status], map: "idx_classes_status")
+  @@map("classes")
+}
+
+model MembershipPackage {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  memberId         String?       @map("member_id") @db.Uuid
+  paymentTypeId    String?       @map("payment_type_id") @db.Uuid
+  totalLessons     Int           @default(0) @map("total_lessons")
+  remainingLessons Int           @default(0) @map("remaining_lessons")
+  usedLessons      Int           @default(0) @map("used_lessons")
+  startDate        DateTime      @map("start_date") @db.Date
+  endDate          DateTime?     @map("end_date") @db.Date
+  status           String?       @default("active") @db.VarChar(20)
+  createdAt        DateTime?     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime?     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  classMembers     ClassMember[]
+  member           Member?       @relation(fields: [memberId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  paymentType      PaymentType?  @relation(fields: [paymentTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([memberId], map: "idx_membership_packages_member_id")
+  @@index([status], map: "idx_membership_packages_status")
+  @@map("membership_packages")
+}
+
+model ClassMember {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  classId             String?            @map("class_id") @db.Uuid
+  memberId            String?            @map("member_id") @db.Uuid
+  membershipPackageId String?            @map("membership_package_id") @db.Uuid
+  attended            Boolean?
+  checkInTime         DateTime?          @map("check_in_time") @db.Timestamptz(6)
+  createdAt           DateTime?          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime?          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  class               Class?             @relation(fields: [classId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  member              Member?            @relation(fields: [memberId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  membershipPackage   MembershipPackage? @relation(fields: [membershipPackageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([classId, memberId])
+  @@index([classId], map: "idx_class_members_class_id")
+  @@index([memberId], map: "idx_class_members_member_id")
+  @@map("class_members")
+}
+
+model InstructorMember {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instructorId String?   @map("instructor_id") @db.Uuid
+  memberId     String?   @map("member_id") @db.Uuid
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  instructor   Profile?  @relation("InstructorProfile", fields: [instructorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  member       Member?   @relation(fields: [memberId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([instructorId, memberId])
+  @@index([instructorId], map: "idx_instructor_members_instructor_id")
+  @@index([memberId], map: "idx_instructor_members_member_id")
+  @@map("instructor_members")
+}
+
+model UserPermission {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId     String?   @map("profile_id") @db.Uuid
+  permissionKey String    @map("permission_key") @db.VarChar(50)
+  granted       Boolean?  @default(false)
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  profile       Profile?  @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([profileId, permissionKey])
+  @@index([profileId], map: "idx_user_permissions_profile_id")
+  @@map("user_permissions")
+}
+
+model Settlement {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instructorId  String?      @map("instructor_id") @db.Uuid
+  year          Int
+  month         Int
+  lessonTypeId  String?      @map("lesson_type_id") @db.Uuid
+  paymentTypeId String?      @map("payment_type_id") @db.Uuid
+  lessonCount   Int          @default(0) @map("lesson_count")
+  createdAt     DateTime?    @default(now()) @map("created_at") @db.Timestamptz(6)
+  instructor    Profile?     @relation(fields: [instructorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  lessonType    ClassType?   @relation(fields: [lessonTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  paymentType   PaymentType? @relation(fields: [paymentTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([instructorId, year, month, lessonTypeId, paymentTypeId])
+  @@index([instructorId], map: "idx_settlements_instructor_id")
+  @@index([year, month], map: "idx_settlements_year_month")
+  @@map("settlements")
+}
+
+model Notice {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title     String    @db.VarChar(200)
+  content   String    @db.Text
+  authorId  String?   @map("author_id") @db.Uuid
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  author    Profile?  @relation(fields: [authorId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([authorId], map: "idx_notices_author_id")
+  @@map("notices")
+}
+
+model Notification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId String    @map("profile_id") @db.Uuid
+  title     String    @db.VarChar(200)
+  message   String?   @db.Text
+  type      String    @db.VarChar(20)
+  read      Boolean   @default(false)
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([profileId], map: "idx_notifications_profile_id")
+  @@index([profileId, read], map: "idx_notifications_profile_read")
+  @@map("notifications")
+}

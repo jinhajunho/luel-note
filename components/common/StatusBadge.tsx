@@ -1,48 +1,66 @@
+"use client"
+
 // components/common/StatusBadge.tsx
-interface StatusBadgeProps {
-  type: 'class' | 'payment' | 'status'
-  value: string
+import { lessonTypeColors, paymentTypeColors, lessonStatusColors, LessonType, PaymentType, LessonStatus } from '@/lib/tokens'
+import { getLessonTypes, getPaymentTypes, colorToLessonTypeClass, colorToPaymentTypeClass } from '@/lib/utils/lesson-types'
+
+type BadgeVariant = 'class' | 'payment' | 'status'
+
+type ValueByVariant<T extends BadgeVariant> =
+  T extends 'class' ? LessonType :
+  T extends 'payment' ? PaymentType :
+  LessonStatus
+
+interface StatusBadgeProps<T extends BadgeVariant = BadgeVariant> {
+  type: T
+  value: ValueByVariant<T>
   className?: string
+  size?: 'sm' | 'md'
 }
 
-export default function StatusBadge({ type, value, className = '' }: StatusBadgeProps) {
-  // 레슨 유형 색상 (진한 톤)
-  const classTypeColors: Record<string, string> = {
-    인트로: 'bg-gray-100 text-gray-700',       // 회색 (체험수업과 동일)
-    개인레슨: 'bg-purple-500 text-white',      // 찐보라
-    듀엣레슨: 'bg-pink-500 text-white',        // 찐핑크
-    그룹레슨: 'bg-orange-500 text-white',      // 찐주황
+
+export default function StatusBadge<T extends BadgeVariant>({ type, value, className = '', size = 'md' }: StatusBadgeProps<T>) {
+  const getColorClass = (): string => {
+    switch (type) {
+      case 'class': {
+        // 동적 레슨 타입에서 색상 가져오기
+        if (typeof window !== 'undefined') {
+          const lessonTypes = getLessonTypes()
+          const lessonType = lessonTypes.find(lt => lt.name === value)
+          if (lessonType) {
+            return colorToLessonTypeClass(lessonType.color)
+          }
+        }
+        // 기본값 (하위 호환)
+        return lessonTypeColors[value as LessonType] || 'bg-gray-100 text-gray-700'
+      }
+      case 'payment': {
+        // 동적 결제 유형에서 색상 가져오기
+        if (typeof window !== 'undefined') {
+          const paymentTypes = getPaymentTypes()
+          const paymentType = paymentTypes.find(pt => pt.name === value)
+          if (paymentType) {
+            return colorToPaymentTypeClass(paymentType.color)
+          }
+        }
+        // 기본값 (하위 호환)
+        return paymentTypeColors[value as PaymentType] || 'bg-gray-100 text-gray-700'
+      }
+      case 'status':
+        return lessonStatusColors[value as LessonStatus] || 'bg-gray-100 text-gray-700'
+      default:
+        return 'bg-gray-100 text-gray-700'
+    }
   }
 
-  // 결제 타입 색상 (진한 톤)
-  const paymentTypeColors: Record<string, string> = {
-    체험수업: 'bg-gray-100 text-gray-700',     // 회색 (인트로와 동일)
-    정규수업: 'bg-blue-500 text-white',        // 찐파랑
-    강사제공: 'bg-indigo-600 text-white',      // 찐남색
-    센터제공: 'bg-cyan-500 text-white',        // 밝은 청록
-  }
-
-  // 레슨 상태 색상 (연한 톤)
-  const statusColors: Record<string, string> = {
-    예정: 'bg-blue-50 text-blue-600',          // 연파랑
-    완료: 'bg-green-50 text-green-600',        // 연초록
-    취소: 'bg-red-50 text-red-600',            // 연빨강
-  }
-
-  let colorClass = ''
-  if (type === 'class') {
-    colorClass = classTypeColors[value] || 'bg-gray-200 text-gray-700'
-  } else if (type === 'payment') {
-    colorClass = paymentTypeColors[value] || 'bg-gray-200 text-gray-700'
-  } else if (type === 'status') {
-    colorClass = statusColors[value] || 'bg-gray-200 text-gray-700'
-  }
+  const sizeClass = size === 'sm' ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'
+  const colorClass = getColorClass()
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${colorClass} ${className}`}
+      className={`inline-flex items-center ${sizeClass} rounded-md font-semibold ${colorClass} ${className}`}
     >
-      {value}
+      {String(value)}
     </span>
   )
 }

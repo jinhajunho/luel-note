@@ -29,8 +29,20 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## 관리자 권한 부여
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+AWS Cognito에서는 역할 정보를 관리하지 않으므로, 최초 관리자 계정은 데이터베이스에서 직접 승격해야 합니다.  
+프로젝트 루트(`E:\dev\luel-note`)에서 다음 명령으로 역할을 설정할 수 있습니다.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+# 의존성 설치 (최초 1회)
+npm install
+
+# 전화번호 01012345678 사용자를 관리자(admin)로 승격
+npm run set-role 01012345678 admin
+
+# 역할은 member, instructor, admin 중 하나를 지정할 수 있습니다.
+```
+
+명령이 성공하면 사용자 권한과 연결된 메뉴 권한이 함께 업데이트됩니다.  
+이후에는 관리자 계정으로 로그인하여 앱 내 "관리자 설정" 모달에서 다른 사용자 권한을 변경할 수 있습니다.

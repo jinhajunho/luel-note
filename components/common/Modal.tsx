@@ -1,13 +1,13 @@
 // components/common/Modal.tsx
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, ReactNode } from 'react'
 
 interface ModalProps {
   isOpen: boolean
   onClose: () => void
   title: string
-  children: React.ReactNode
+  children: ReactNode
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl'
   showCloseButton?: boolean
   className?: string

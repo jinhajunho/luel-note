@@ -1,207 +1,322 @@
-'use client'
+"use client"
 
-import { useState } from 'react'
-import Header from '@/components/common/Header'
-import BottomNavigation from '@/components/common/BottomNavigation'
-import Button from '@/components/common/Button'
-import StatusBadge from '@/components/common/StatusBadge'
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Bell, ChevronLeft, ChevronRight, CheckCircle } from "lucide-react"
+import { LessonStatusBadge, LessonTypeBadge } from '@/components/common/LessonBadges'
+import { useAuth } from '@/lib/auth-context'
+import { getMemberIdByProfileId } from '@/app/actions/member-data'
+import { getMemberClasses } from '@/app/actions/member-classes'
+import { getMemberTotalRemaining } from '@/app/actions/membership'
+import type { MemberClass } from '@/app/actions/member-classes'
+import { formatInstructorName } from '@/lib/utils/text'
 
 export default function MemberSchedulePage() {
-  const [selectedDate, setSelectedDate] = useState(15)
-  const [currentMonth, setCurrentMonth] = useState({ month: 1, year: 2025 })
+  const today = new Date()
+  const { profile, loading: authLoading } = useAuth()
+  const router = useRouter()
 
-  // 레슨 데이터
-  const lessons = [
-    {
-      id: 1,
-      time: '10:00',
-      type: '개인레슨',
-      status: '예정',
-      instructor: '김민지',
-      room: 'A룸',
-      participants: 1,
-      maxParticipants: 1,
-    },
-    {
-      id: 2,
-      time: '14:00',
-      type: '듀엣레슨',
-      status: '예정',
-      instructor: '박서연',
-      room: 'B룸',
-      participants: 2,
-      maxParticipants: 2,
-    },
-    {
-      id: 3,
-      time: '16:30',
-      type: '그룹레슨',
-      status: '예정',
-      instructor: '이지은',
-      room: 'C룸',
-      participants: 4,
-      maxParticipants: 6,
-    },
-  ]
+  const [currentYear, setCurrentYear] = useState(today.getFullYear())
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1)
+  const [selectedDay, setSelectedDay] = useState(today.getDate())
+  const [filter, setFilter] = useState("전체")
+  const [statusFilter, setStatusFilter] = useState<'전체' | '예정' | '완료' | '취소'>("전체")
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalLessonId, setModalLessonId] = useState<string | null>(null)
+  const [lessons, setLessons] = useState<MemberClass[]>([])
+  const [remainingLessons, setRemainingLessons] = useState(0)
+  const [loading, setLoading] = useState(true)
 
-  // 레슨 있는 날짜
-  const daysWithLessons = [12, 14, 15, 18, 20, 22, 25]
+  // 역할 체크: 강사나 관리자는 해당 페이지로 리다이렉트
+  useEffect(() => {
+    if (authLoading) return
+    if (!profile) return
+    
+    if (profile.role === 'instructor') {
+      router.replace('/instructor/schedule')
+      return
+    }
+    if (profile.role === 'admin') {
+      router.replace('/admin/schedule')
+      return
+    }
+  }, [profile, authLoading, router])
 
-  // 캘린더 날짜 생성
-  const generateCalendarDays = () => {
-    const daysInMonth = 31
-    const firstDayOfWeek = 3 // 수요일
-    const days = []
+  // 회원 데이터 로드
+  useEffect(() => {
+    const loadData = async () => {
+      if (!profile?.id) return
+      if (profile.role !== 'member') return // 회원만 데이터 로드
+      
+      try {
+        setLoading(true)
+        // 회원 ID 가져오기
+        const memberId = await getMemberIdByProfileId(profile.id)
+        if (!memberId) {
+          console.warn('회원 정보를 찾을 수 없습니다.')
+          setLessons([])
+          setRemainingLessons(0)
+          setLoading(false)
+          return
+        }
 
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      days.push(null)
+        // 레슨 데이터 가져오기
+        const memberLessons = await getMemberClasses(memberId)
+        setLessons(memberLessons)
+
+        // 잔여 레슨 수 가져오기
+        const remaining = await getMemberTotalRemaining(memberId)
+        setRemainingLessons(remaining)
+      } catch (error) {
+        console.error('데이터 로드 실패:', error)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i)
+    loadData()
+  }, [profile])
+
+  // 레슨이 있는 날짜 추출
+  const daysWithLessons = lessons
+    .filter(lesson => {
+      const lessonDate = new Date(lesson.date)
+      return lessonDate.getFullYear() === currentYear && 
+             lessonDate.getMonth() + 1 === currentMonth
+    })
+    .map(lesson => new Date(lesson.date).getDate())
+    .filter((value, index, self) => self.indexOf(value) === index) // 중복 제거
+
+  // 선택한 날짜의 레슨 필터링
+  const selectedDateLessons = lessons.filter((lesson) => {
+    const lessonDate = new Date(lesson.date)
+    return lessonDate.getFullYear() === currentYear &&
+           lessonDate.getMonth() + 1 === currentMonth &&
+           lessonDate.getDate() === selectedDay
+  })
+
+  // 이번 주 예정 레슨 수 계산
+  const thisWeekLessons = lessons.filter((lesson) => {
+    const lessonDate = new Date(lesson.date)
+    const now = new Date()
+    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()))
+    const endOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 6))
+    return lessonDate >= startOfWeek && lessonDate <= endOfWeek && lesson.status === '예정'
+  }).length
+
+  const daysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate()
+  const firstDayOfWeek = (year: number, month: number) => new Date(year, month - 1, 1).getDay()
+
+  const handlePrevMonth = () => {
+    if (currentMonth === 1) {
+      setCurrentMonth(12)
+      setCurrentYear(currentYear - 1)
+    } else {
+      setCurrentMonth(currentMonth - 1)
+    }
+  }
+
+  const handleNextMonth = () => {
+    if (currentMonth === 12) {
+      setCurrentMonth(1)
+      setCurrentYear(currentYear + 1)
+    } else {
+      setCurrentMonth(currentMonth + 1)
+    }
+  }
+
+  const filteredLessons = selectedDateLessons.filter((l) => {
+    const typeOk = filter === '전체' || l.type === filter
+    const statusOk = statusFilter === '전체' || l.status === statusFilter
+    return typeOk && statusOk
+  })
+
+  const openModal = (id: string) => {
+    setModalLessonId(id)
+    setModalOpen(true)
+    document.body.style.overflow = "hidden"
+  }
+
+  const closeModal = () => {
+    setModalOpen(false)
+    setModalLessonId(null)
+    document.body.style.overflow = ""
+  }
+
+  const currentLesson = lessons.find((l) => l.id === modalLessonId)
+
+  const renderCalendar = () => {
+    const total = daysInMonth(currentYear, currentMonth)
+    const start = firstDayOfWeek(currentYear, currentMonth)
+    const cells = []
+
+    for (let i = 0; i < start; i++) {
+      cells.push(<div key={`empty-${i}`} className="aspect-square" />)
     }
 
-    return days
+    for (let d = 1; d <= total; d++) {
+      const isSelected = d === selectedDay
+      const hasLesson = daysWithLessons.includes(d)
+
+      cells.push(
+        <button
+          key={d}
+          onClick={() => setSelectedDay(d)}
+          className={`relative aspect-square rounded-lg flex flex-col items-center justify-center text-sm font-medium transition-colors ${
+            isSelected ? "bg-blue-600 text-white font-semibold" : "text-[#1a1a1a] hover:bg-[#f5f1e8]"
+          }`}
+        >
+          {d}
+          {hasLesson && !isSelected && <span className="absolute bottom-1 h-1 w-1 rounded-full bg-blue-600" />}
+        </button>,
+      )
+    }
+
+    return cells
   }
 
-  const calendarDays = generateCalendarDays()
-
-  const checkAttendance = (lessonId: number) => {
-    alert('출석 체크되었습니다!')
-  }
+  // filter options no longer used in UI
 
   return (
-    <div className="min-h-screen bg-[#f5f1e8]">
-      {/* 공통 헤더 */}
-      <Header />
-
-      <main className="max-w-2xl mx-auto px-5 py-6 pb-24 space-y-6">
-        {/* 오늘의 요약 카드 */}
-        <div className="bg-white border border-[#f0ebe1] rounded-xl p-5">
+    <div className="px-5 py-6 pb-24 space-y-6">
+        {/* Today Summary */}
+        <section className="bg-white border border-[#f0ebe1] rounded-xl p-5">
           <div className="mb-4">
             <p className="text-sm text-[#7a6f61]">오늘</p>
-            <p className="text-lg font-semibold text-[#1a1a1a]">2025년 1월 15일 수요일</p>
+            <p className="text-lg font-semibold text-[#1a1a1a]">
+              {new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(today)}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-lg p-4">
               <p className="text-sm text-[#7a6f61] mb-1">이번 주 예정</p>
-              <p className="text-2xl font-bold text-[#1a1a1a]">3회</p>
+              <p className="text-2xl font-bold text-[#1a1a1a]">{thisWeekLessons}회</p>
             </div>
             <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-lg p-4">
               <p className="text-sm text-[#7a6f61] mb-1">잔여 레슨</p>
-              <p className="text-2xl font-bold text-[#1a1a1a]">12회</p>
+              <p className="text-2xl font-bold text-[#1a1a1a]">{remainingLessons}회</p>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* 캘린더 */}
-        <div className="bg-white border border-[#f0ebe1] rounded-xl p-5">
+        {/* Calendar */}
+        <section className="bg-white border border-[#f0ebe1] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-[#1a1a1a]">
-              {currentMonth.year}년 {currentMonth.month}월
+              {currentYear}년 {currentMonth}월
             </h2>
             <div className="flex gap-2">
               <button
-                onClick={() =>
-                  setCurrentMonth((prev) => ({
-                    ...prev,
-                    month: prev.month === 1 ? 12 : prev.month - 1,
-                    year: prev.month === 1 ? prev.year - 1 : prev.year,
-                  }))
-                }
-                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-[#1a1a1a] hover:text-[#1a1a1a] transition-colors"
+                onClick={handlePrevMonth}
+                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-colors"
               >
-                ‹
+                <ChevronLeft className="w-4 h-4" />
               </button>
               <button
-                onClick={() =>
-                  setCurrentMonth((prev) => ({
-                    ...prev,
-                    month: prev.month === 12 ? 1 : prev.month + 1,
-                    year: prev.month === 12 ? prev.year + 1 : prev.year,
-                  }))
-                }
-                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-[#1a1a1a] hover:text-[#1a1a1a] transition-colors"
+                onClick={handleNextMonth}
+                className="w-8 h-8 border border-[#f0ebe1] bg-white rounded-lg flex items-center justify-center text-[#7a6f61] hover:border-gray-900 hover:text-gray-900 transition-colors"
               >
-                ›
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
-
-          {/* 캘린더 그리드 */}
           <div className="space-y-2">
-            {/* 요일 헤더 */}
             <div className="grid grid-cols-7 gap-1 mb-2">
-              {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
-                <div key={day} className="text-center text-xs font-medium text-[#9d917f] py-2">
+              {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+                <div key={day} className="text-center text-xs font-medium text-[#7a6f61] py-2">
                   {day}
                 </div>
               ))}
             </div>
+            <div className="grid grid-cols-7 gap-1">{renderCalendar()}</div>
+          </div>
+        </section>
 
-            {/* 날짜 */}
-            <div className="grid grid-cols-7 gap-1">
-              {calendarDays.map((day, index) => (
-                <button
-                  key={index}
-                  onClick={() => day && setSelectedDate(day)}
-                  disabled={!day}
-                  className={`
-                    relative aspect-square rounded-lg flex flex-col items-center justify-center text-sm font-medium
-                    transition-colors
-                    ${!day ? 'invisible' : ''}
-                    ${day === 15 ? 'bg-[#f0ebe1] font-semibold' : ''}
-                    ${day === selectedDate ? 'bg-blue-600 text-white font-semibold' : 'text-[#1a1a1a] hover:bg-[#f5f1e8]'}
-                  `}
-                >
-                  {day}
-                  {day && daysWithLessons.includes(day) && day !== selectedDate && (
-                    <span className="absolute bottom-1 h-1 w-1 rounded-full bg-blue-600" />
+        {/* Lesson List */}
+        <section className="space-y-3">
+          <div className="px-1">
+            <h2 className="text-lg font-semibold text-[#1a1a1a]">오늘의 레슨</h2>
+          </div>
+          <div className="space-y-3">
+            {filteredLessons.map((lesson) => {
+              const attended = lesson.attended === true
+              return (
+                <div key={lesson.id} className="bg-white border border-[#f0ebe1] rounded-lg p-4">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-semibold text-[#1a1a1a]">{lesson.startTime}</span>
+                      <LessonTypeBadge type={lesson.type as any} />
+                      <LessonStatusBadge status={lesson.status as any} />
+                    </div>
+                    {attended && (
+                      <div className="flex items-center text-green-600">
+                        <CheckCircle className="w-5 h-5" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-sm text-[#7a6f61]">{formatInstructorName(lesson.instructor)}</p>
+                    {attended && lesson.checkInTime && (
+                      <p className="text-xs text-green-600">출석 {lesson.checkInTime}</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      {/* Modal */}
+      {modalOpen && currentLesson && (
+        <div
+          className="fixed inset-0 z-[2000] flex items-center justify-center p-5 bg-black/50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeModal()
+          }}
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-[#f0ebe1]">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {currentLesson.startTime} · {currentLesson.type}
+              </h2>
+              <button
+                onClick={closeModal}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                aria-label="닫기"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex border-b border-[#f0ebe1]">
+              <button className="px-4 py-2 text-sm font-semibold text-blue-600 border-b-2 border-blue-600">
+                참여자
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              <div className="space-y-3">
+                <div className="p-3 border border-[#f0ebe1] rounded-lg bg-white">
+                  <div className="text-sm text-[#7a6f61] mb-2">레슨 정보</div>
+                  <div className="text-[#1a1a1a] font-medium mb-1">날짜: {currentLesson.date}</div>
+                  <div className="text-[#1a1a1a] font-medium mb-1">시간: {currentLesson.startTime} - {currentLesson.endTime}</div>
+                  <div className="text-[#1a1a1a] font-medium mb-1">강사: {formatInstructorName(currentLesson.instructor)}</div>
+                  <div className="text-[#1a1a1a] font-medium">결제 유형: {currentLesson.paymentType}</div>
+                  {currentLesson.attended !== null && (
+                    <div className="mt-2">
+                      <span className={`text-xs ${currentLesson.attended ? 'text-green-700' : 'text-[#7a6f61]'}`}>
+                        {currentLesson.attended ? '출석 완료' : '결석'}
+                      </span>
+                      {currentLesson.checkInTime && (
+                        <span className="text-xs text-[#7a6f61] ml-2">({currentLesson.checkInTime})</span>
+                      )}
+                    </div>
                   )}
-                </button>
-              ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* 레슨 목록 */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-[#1a1a1a] px-1">오늘의 레슨</h2>
-          {lessons.map((lesson) => (
-            <div key={lesson.id} className="bg-white border border-[#f0ebe1] rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-lg font-semibold text-[#1a1a1a]">{lesson.time}</span>
-                <StatusBadge type="class" value={lesson.type} />
-                <StatusBadge type="status" value={lesson.status} />
-              </div>
-
-              <div className="space-y-2 mb-4">
-                <p className="text-sm text-[#7a6f61]">
-                  {lesson.instructor} · {lesson.room}
-                </p>
-                <p className="text-sm text-[#1a1a1a]">
-                  참가자: {lesson.participants}/{lesson.maxParticipants}명
-                </p>
-              </div>
-
-              <Button
-                variant="primary"
-                size="md"
-                fullWidth
-                onClick={() => checkAttendance(lesson.id)}
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                출석 체크
-              </Button>
-            </div>
-          ))}
-        </div>
-      </main>
-
-      {/* 공통 하단 네비게이션 */}
-      <BottomNavigation />
+      )}
     </div>
   )
 }

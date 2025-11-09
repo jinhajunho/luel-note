@@ -1,319 +1,659 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+import type { Prisma } from '@prisma/client'
+import { AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider'
 
-// ==================== 타입 정의 ====================
+import { prisma } from '@/lib/db/prisma'
+import { normalizePhone, phoneToEmail } from '@/lib/auth-helpers'
+import { getCognitoClient } from '@/lib/cognito/client'
+import { COGNITO_USER_POOL_ID } from '@/lib/config'
 
-interface ConvertToMemberResult {
-  success: boolean
-  error?: string
+type ConvertToMemberResult = { success: true } | { success: false; error: string }
+type SetRoleResult = { success: true } | { success: false; error: string }
+type ResetPasswordResult = { success: true } | { success: false; error: string }
+
+type Role = 'guest' | 'member' | 'instructor' | 'admin'
+const MENU_KEYS = [
+  'menu_dashboard',
+  'menu_attendance',
+  'menu_members',
+  'menu_classes',
+  'menu_settlements',
+  'menu_settings',
+] as const
+type MenuPermissionKey = (typeof MENU_KEYS)[number]
+
+const ROLE_PERMISSIONS: Record<Role, Record<MenuPermissionKey, boolean>> = {
+  guest: {
+    menu_dashboard: true,
+    menu_attendance: true,
+    menu_members: false,
+    menu_classes: false,
+    menu_settlements: false,
+    menu_settings: true,
+  },
+  member: {
+    menu_dashboard: true,
+    menu_attendance: true,
+    menu_members: false,
+    menu_classes: false,
+    menu_settlements: false,
+    menu_settings: true,
+  },
+  instructor: {
+    menu_dashboard: true,
+    menu_attendance: true,
+    menu_members: true,
+    menu_classes: true,
+    menu_settlements: true,
+    menu_settings: true,
+  },
+  admin: {
+    menu_dashboard: true,
+    menu_attendance: true,
+    menu_members: true,
+    menu_classes: true,
+    menu_settlements: true,
+    menu_settings: true,
+  },
 }
 
-interface SetRoleResult {
-  success: boolean
-  error?: string
+const DEFAULT_MEMBER_JOIN_DATE = () => new Date()
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return fallback
 }
 
-interface ResetPasswordResult {
-  success: boolean
-  error?: string
+async function syncMenuPermissions(
+  tx: Prisma.TransactionClient,
+  profileId: string,
+  role: Role
+) {
+  const config = ROLE_PERMISSIONS[role]
+  await Promise.all(
+    MENU_KEYS.map((key) =>
+      tx.userPermission.upsert({
+        where: {
+          profileId_permissionKey: {
+            profileId,
+            permissionKey: key,
+          },
+        },
+        create: {
+          profileId,
+          permissionKey: key,
+          granted: config[key],
+        },
+        update: {
+          granted: config[key],
+        },
+      })
+    )
+  )
+}
+
+async function ensureMemberRecord(
+  tx: Prisma.TransactionClient,
+  profileId: string,
+  phone: string,
+  name?: string | null,
+  memberType: 'member' | 'guest' = 'member'
+) {
+  const existing = await tx.member.findUnique({
+    where: { phone },
+    select: { id: true },
+  })
+
+  if (existing) {
+    return tx.member.update({
+      where: { phone },
+      data: {
+        profileId,
+        type: memberType,
+        status: 'active',
+      },
+    })
+  }
+
+  return tx.member.create({
+    data: {
+      profileId,
+      phone,
+      name: name ?? '',
+      type: memberType,
+      status: 'active',
+      joinDate: DEFAULT_MEMBER_JOIN_DATE(),
+    },
+  })
 }
 
 // ==================== 회원 승격 (비회원 → 정회원) ====================
 
-/**
- * 비회원을 정회원으로 승격
- * - members 테이블의 type을 'member'로 변경
- * - status를 'active'로 변경
- * - profile의 role도 'member'로 업데이트
- * - user_permissions에 회원 권한 부여
- */
 export async function convertToMember(memberPhone: string): Promise<ConvertToMemberResult> {
+  const phone = normalizePhone(memberPhone)
+
   try {
-    const supabase = await createClient()
-
-    // 1. members 테이블 업데이트 (type = 'member', status = 'active')
-    const { error: memberError } = await supabase
-      .from('members')
-      .update({
-        type: 'member',
-        status: 'active',
-        updated_at: new Date().toISOString()
+    await prisma.$transaction(async (tx) => {
+      const member = await tx.member.findUnique({
+        where: { phone },
+        select: { id: true, profileId: true, name: true },
       })
-      .eq('phone', memberPhone)
 
-    if (memberError) {
-      console.error('회원 타입 업데이트 실패:', memberError)
-      return {
-        success: false,
-        error: '회원 정보 업데이트에 실패했습니다'
+      if (!member) {
+        throw new Error('회원 정보를 찾을 수 없습니다.')
       }
-    }
 
-    // 2. profile_id 가져오기
-    const { data: member, error: getMemberError } = await supabase
-      .from('members')
-      .select('profile_id')
-      .eq('phone', memberPhone)
-      .single()
-
-    if (getMemberError || !member) {
-      console.error('회원 조회 실패:', getMemberError)
-      return {
-        success: false,
-        error: '회원 정보를 찾을 수 없습니다'
+      let profileId = member.profileId
+      if (!profileId) {
+        const profile = await tx.profile.findUnique({
+          where: { phone },
+          select: { id: true },
+        })
+        if (!profile) {
+          throw new Error('프로필 정보를 찾을 수 없습니다.')
+        }
+        profileId = profile.id
+        await tx.member.update({
+          where: { id: member.id },
+          data: { profileId },
+        })
       }
-    }
 
-    // 3. profiles 테이블 업데이트 (role = 'member')
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({
-        role: 'member',
-        updated_at: new Date().toISOString()
+      await tx.member.update({
+        where: { id: member.id },
+        data: {
+          type: 'member',
+          status: 'active',
+        },
       })
-      .eq('id', member.profile_id)
 
-    if (profileError) {
-      console.error('프로필 업데이트 실패:', profileError)
-      // 프로필 업데이트 실패해도 회원 전환은 성공으로 처리
-    }
+      await tx.profile.update({
+        where: { id: profileId },
+        data: { role: 'member' },
+      })
 
-    // 4. user_permissions 확인 및 생성/업데이트
-    const { data: existingPermission } = await supabase
-      .from('user_permissions')
-      .select('*')
-      .eq('phone', memberPhone)
-      .single()
+      await syncMenuPermissions(tx, profileId, 'member')
+    })
 
-    if (existingPermission) {
-      // 기존 권한이 있으면 업데이트
-      const { error: permissionError } = await supabase
-        .from('user_permissions')
-        .update({
-          menu_dashboard: true,
-          menu_attendance: true,
-          menu_members: false,
-          menu_classes: false,
-          menu_settlements: false,
-          menu_settings: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('phone', memberPhone)
+    revalidatePath('/admin/members')
+    revalidatePath('/instructor/members')
 
-      if (permissionError) {
-        console.error('권한 업데이트 실패:', permissionError)
-      }
-    } else {
-      // 권한이 없으면 생성
-      const { error: permissionError } = await supabase
-        .from('user_permissions')
-        .insert({
-          phone: memberPhone,
-          menu_dashboard: true,
-          menu_attendance: true,
-          menu_members: false,
-          menu_classes: false,
-          menu_settlements: false,
-          menu_settings: true
-        })
-
-      if (permissionError) {
-        console.error('권한 생성 실패:', permissionError)
-      }
-    }
-
-    return {
-      success: true
-    }
+    return { success: true }
   } catch (error) {
-    console.error('회원 전환 중 오류:', error)
     return {
       success: false,
-      error: '회원 전환 중 오류가 발생했습니다'
+      error: getErrorMessage(error, '회원 전환 중 오류가 발생했습니다'),
+    }
+  }
+}
+
+export async function convertToMemberByMemberId(memberId: string): Promise<ConvertToMemberResult> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const member = await tx.member.findUnique({
+        where: { id: memberId },
+        select: { id: true, profileId: true, phone: true, name: true },
+      })
+
+      if (!member) {
+        throw new Error('회원 정보를 찾을 수 없습니다.')
+      }
+
+      const phone = member.phone
+      let profileId = member.profileId
+
+      if (!profileId) {
+        const profile = await tx.profile.findUnique({
+          where: { phone },
+          select: { id: true },
+        })
+        if (!profile) {
+          throw new Error('프로필 정보를 찾을 수 없습니다.')
+        }
+        profileId = profile.id
+        await tx.member.update({
+          where: { id: member.id },
+          data: { profileId },
+        })
+      }
+
+      await tx.member.update({
+        where: { id: member.id },
+        data: {
+          type: 'member',
+          status: 'active',
+        },
+      })
+
+      await tx.profile.update({
+        where: { id: profileId },
+        data: { role: 'member' },
+      })
+
+      await syncMenuPermissions(tx, profileId, 'member')
+    })
+
+    revalidatePath('/admin/members')
+    revalidatePath('/instructor/members')
+
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error, '회원 전환 중 오류가 발생했습니다'),
     }
   }
 }
 
 // ==================== 권한 설정 ====================
 
-/**
- * 회원 권한(role) 설정
- * - profiles.role 업데이트
- * - user_permissions 자동 설정
- */
 export async function setMemberRole(
   memberPhone: string,
-  role: 'member' | 'instructor' | 'admin'
+  role: Role
 ): Promise<SetRoleResult> {
+  const phone = normalizePhone(memberPhone)
+
   try {
-    const supabase = await createClient()
-
-    // 1. profile_id 가져오기
-    const { data: member, error: getMemberError } = await supabase
-      .from('members')
-      .select('profile_id')
-      .eq('phone', memberPhone)
-      .single()
-
-    if (getMemberError || !member) {
-      console.error('회원 조회 실패:', getMemberError)
-      return {
-        success: false,
-        error: '회원 정보를 찾을 수 없습니다'
-      }
-    }
-
-    // 2. profiles 테이블 업데이트
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({
-        role: role,
-        updated_at: new Date().toISOString()
+    await prisma.$transaction(async (tx) => {
+      const profile = await tx.profile.findUnique({
+        where: { phone },
+        select: { id: true, name: true },
       })
-      .eq('id', member.profile_id)
 
-    if (profileError) {
-      console.error('프로필 업데이트 실패:', profileError)
-      return {
-        success: false,
-        error: '권한 설정에 실패했습니다'
+      if (!profile) {
+        throw new Error('프로필 정보를 찾을 수 없습니다.')
       }
-    }
 
-    // 3. 역할별 권한 설정
-    const permissions = {
-      member: {
-        menu_dashboard: true,
-        menu_attendance: true,
-        menu_members: false,
-        menu_classes: false,
-        menu_settlements: false,
-        menu_settings: true
-      },
-      instructor: {
-        menu_dashboard: true,
-        menu_attendance: true,
-        menu_members: true,
-        menu_classes: true,
-        menu_settlements: true,
-        menu_settings: true
-      },
-      admin: {
-        menu_dashboard: true,
-        menu_attendance: true,
-        menu_members: true,
-        menu_classes: true,
-        menu_settlements: true,
-        menu_settings: true
-      }
-    }
+      await tx.profile.update({
+        where: { id: profile.id },
+        data: { role },
+      })
 
-    // 4. user_permissions 확인 및 업데이트/생성
-    const { data: existingPermission } = await supabase
-      .from('user_permissions')
-      .select('*')
-      .eq('phone', memberPhone)
-      .single()
-
-    if (existingPermission) {
-      // 업데이트
-      const { error: permissionError } = await supabase
-        .from('user_permissions')
-        .update({
-          ...permissions[role],
-          updated_at: new Date().toISOString()
+      if (role === 'member' || role === 'guest') {
+        await ensureMemberRecord(tx, profile.id, phone, profile.name, role === 'guest' ? 'guest' : 'member')
+      } else {
+        await tx.member.deleteMany({
+          where: { profileId: profile.id },
         })
-        .eq('phone', memberPhone)
-
-      if (permissionError) {
-        console.error('권한 업데이트 실패:', permissionError)
       }
-    } else {
-      // 생성
-      const { error: permissionError } = await supabase
-        .from('user_permissions')
-        .insert({
-          phone: memberPhone,
-          ...permissions[role]
-        })
 
-      if (permissionError) {
-        console.error('권한 생성 실패:', permissionError)
-      }
-    }
+      await syncMenuPermissions(tx, profile.id, role)
+    })
 
-    return {
-      success: true
-    }
+    revalidatePath('/admin/members')
+    revalidatePath('/instructor/members')
+
+    return { success: true }
   } catch (error) {
-    console.error('권한 설정 중 오류:', error)
     return {
       success: false,
-      error: '권한 설정 중 오류가 발생했습니다'
+      error: getErrorMessage(error, '권한 설정 중 오류가 발생했습니다'),
+    }
+  }
+}
+
+export async function setProfileRole(
+  profileId: string,
+  role: Role
+): Promise<SetRoleResult> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const profile = await tx.profile.findUnique({
+        where: { id: profileId },
+        select: { id: true, phone: true, name: true },
+      })
+
+      if (!profile || !profile.phone) {
+        throw new Error('프로필 정보를 찾을 수 없습니다.')
+      }
+
+      const phone = normalizePhone(profile.phone)
+
+      await tx.profile.update({
+        where: { id: profileId },
+        data: { role },
+      })
+
+      if (role === 'member' || role === 'guest') {
+        await ensureMemberRecord(tx, profileId, phone, profile.name, role === 'guest' ? 'guest' : 'member')
+      } else {
+        await tx.member.deleteMany({ where: { profileId } })
+      }
+
+      await syncMenuPermissions(tx, profileId, role)
+    })
+
+    revalidatePath('/admin/members')
+    revalidatePath('/admin/profile')
+    revalidatePath('/profile')
+
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error, '권한 설정 중 오류가 발생했습니다'),
     }
   }
 }
 
 // ==================== 비밀번호 초기화 ====================
 
-/**
- * 관리자용 비밀번호 초기화
- * - 비밀번호를 전화번호로 초기화
- * - Supabase Admin API 사용
- */
 export async function resetMemberPassword(memberPhone: string): Promise<ResetPasswordResult> {
+  const phone = normalizePhone(memberPhone)
+  const email = phoneToEmail(phone)
+  const client = getCognitoClient()
+
   try {
-    const supabase = await createClient()
-
-    // 1. auth_id 가져오기
-    const { data: profile, error: getProfileError } = await supabase
-      .from('profiles')
-      .select('auth_id')
-      .eq('phone', memberPhone)
-      .single()
-
-    if (getProfileError || !profile) {
-      console.error('프로필 조회 실패:', getProfileError)
-      return {
-        success: false,
-        error: '회원 정보를 찾을 수 없습니다'
-      }
-    }
-
-    // 2. Supabase Admin API로 비밀번호 초기화
-    // 초기 비밀번호: 전화번호 (하이픈 제거)
-    const initialPassword = memberPhone.replace(/-/g, '')
-
-    // TODO: Supabase Admin API 설정 필요
-    // 현재는 서버 환경에서 실행되므로 Admin API를 사용할 수 있습니다
-    // 하지만 SUPABASE_SERVICE_ROLE_KEY가 환경변수에 있어야 합니다
-
-    const adminAuthClient = supabase.auth.admin
-
-    const { error: updateError } = await adminAuthClient.updateUserById(
-      profile.auth_id,
-      {
-        password: initialPassword
-      }
+    await client.send(
+      new AdminSetUserPasswordCommand({
+        UserPoolId: COGNITO_USER_POOL_ID,
+        Username: email,
+        Password: phone,
+        Permanent: true,
+      })
     )
 
-    if (updateError) {
-      console.error('비밀번호 초기화 실패:', updateError)
-      return {
-        success: false,
-        error: '비밀번호 초기화에 실패했습니다'
-      }
-    }
-
-    return {
-      success: true
-    }
+    return { success: true }
   } catch (error) {
-    console.error('비밀번호 초기화 중 오류:', error)
     return {
       success: false,
-      error: '비밀번호 초기화 중 오류가 발생했습니다'
+      error: getErrorMessage(error, '비밀번호 초기화에 실패했습니다'),
     }
   }
 }
+
+// ==================== 회원 메모 ====================
+
+export async function updateMemberNotes(
+  memberPhone: string,
+  notes: string
+): Promise<{ success: boolean; error?: string }> {
+  const phone = normalizePhone(memberPhone)
+
+  try {
+    const result = await prisma.member.updateMany({
+      where: { phone },
+      data: {
+        notes,
+        updatedAt: new Date(),
+      } as any,
+    })
+
+    if (result.count === 0) {
+      return { success: false, error: '회원 정보를 찾을 수 없습니다' }
+    }
+
+    revalidatePath('/admin/members')
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error, '메모 업데이트에 실패했습니다'),
+    }
+  }
+}
+
+// ==================== 조회 액션 ====================
+
+const normalize = (value?: string | null) => {
+  if (!value) return ''
+  try {
+    return value.normalize('NFC')
+  } catch {
+    return value
+  }
+}
+
+export async function getAllProfiles(): Promise<{
+  success: boolean
+  data?: Array<{ id: string; name: string; phone: string; role: Role | null }>
+  error?: string
+}> {
+  try {
+    const profiles = await prisma.profile.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, phone: true, role: true },
+    })
+
+      return {
+        success: true,
+        data: profiles.map((profile) => ({
+          ...profile,
+          name: normalize(profile.name),
+          phone: normalize(profile.phone),
+          role: (profile.role ?? null) as Role | null,
+        })),
+      }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error, '사용자 목록을 불러올 수 없습니다'),
+    }
+  }
+}
+
+export async function getAllMembers(): Promise<{
+  success: boolean
+  data?: Array<{
+    id: string
+    name: string
+    phone: string
+    status: 'active' | 'inactive'
+    type: 'member' | 'guest'
+    joinDate: string
+    instructor?: string | null
+    remainingLessons: number
+    totalLessons: number
+    notes?: string | null
+  }>
+  error?: string
+}> {
+  try {
+    const members = await prisma.member.findMany({
+      include: {
+        instructorMembers: {
+          include: {
+            instructor: {
+              select: { name: true },
+            },
+          },
+        },
+        membershipPackages: {
+          where: { status: 'active' },
+          select: { remainingLessons: true, totalLessons: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const profileIds = Array.from(
+      new Set(
+        members
+          .map((member) => member.profileId)
+          .filter((value): value is string => Boolean(value))
+      )
+    )
+
+    const profiles = profileIds.length
+      ? await prisma.profile.findMany({
+          where: { id: { in: profileIds } },
+          select: { id: true, name: true, phone: true, role: true },
+        })
+      : []
+
+    const profileMap = new Map(
+      profiles.map((profile) => [
+        profile.id,
+        {
+          ...profile,
+          name: normalize(profile.name),
+          phone: normalize(profile.phone),
+        },
+      ])
+    )
+
+    const data = members
+      .map((member) => {
+        const profile = member.profileId ? profileMap.get(member.profileId) : undefined
+        const name = normalize(profile?.name ?? member.name)
+        const phone = normalize(profile?.phone ?? member.phone)
+        const instructorNames = member.instructorMembers
+          .map((im) => im.instructor?.name)
+          .filter((value): value is string => Boolean(value))
+
+        const remainingLessons = member.membershipPackages.reduce(
+          (sum, pkg) => sum + (pkg.remainingLessons ?? 0),
+          0
+        )
+        const totalLessons = member.membershipPackages.reduce(
+          (sum, pkg) => sum + (pkg.totalLessons ?? 0),
+          0
+        )
+
+        const joinDateSource = member.joinDate ?? member.createdAt
+
+        return {
+          id: member.id,
+          name,
+          phone,
+          status: member.status as 'active' | 'inactive',
+          type: member.type as 'member' | 'guest',
+          joinDate: joinDateSource ? joinDateSource.toISOString().split('T')[0] : '',
+          instructor: instructorNames.length ? instructorNames.join(', ') : null,
+          remainingLessons,
+          totalLessons,
+          notes: null,
+        }
+      })
+
+    return { success: true, data }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error, '회원 목록을 불러오는 중 오류가 발생했습니다'),
+    }
+  }
+}
+
+export async function getInstructorMembers(instructorProfileId: string): Promise<{
+  success: boolean
+  data?: Array<{
+    id: string
+    name: string
+    phone: string
+    status: 'active' | 'inactive'
+    type: 'member' | 'guest'
+    joinDate: string
+    remainingLessons: number
+    totalLessons: number
+    notes?: string | null
+  }>
+  error?: string
+}> {
+  try {
+    const assignments = await prisma.instructorMember.findMany({
+      where: { instructorId: instructorProfileId },
+      include: {
+        member: {
+          include: {
+            membershipPackages: {
+              where: { status: 'active' },
+              select: { remainingLessons: true, totalLessons: true },
+            },
+          },
+        },
+      },
+    })
+
+    const data = assignments
+      .map((assignment) => assignment.member)
+      .filter((member): member is NonNullable<typeof member> => Boolean(member))
+      .map((member) => {
+        const remainingLessons = member.membershipPackages.reduce(
+          (sum, pkg) => sum + (pkg.remainingLessons ?? 0),
+          0
+        )
+        const totalLessons = member.membershipPackages.reduce(
+          (sum, pkg) => sum + (pkg.totalLessons ?? 0),
+          0
+        )
+
+        const joinDateSource = member.joinDate ?? member.createdAt
+
+        return {
+          id: member.id,
+          name: member.name,
+          phone: member.phone,
+          status: member.status as 'active' | 'inactive',
+          type: member.type as 'member' | 'guest',
+          joinDate: joinDateSource ? joinDateSource.toISOString().split('T')[0] : '',
+          remainingLessons,
+          totalLessons,
+          notes: null,
+        }
+      })
+
+    return { success: true, data }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error, '강사 담당 회원 목록을 불러오는 중 오류가 발생했습니다'),
+    }
+  }
+}
+
+// ==================== 강사 배정 ====================
+
+export async function assignInstructorsToMember(
+  memberId: string,
+  instructorIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.instructorMember.findMany({
+        where: { memberId },
+        select: { instructorId: true },
+      })
+
+      const existingIds = existing
+        .map((item) => item.instructorId)
+        .filter((id): id is string => Boolean(id))
+      const incomingUnique = Array.from(new Set(instructorIds))
+
+      const toDelete = existingIds.filter((id) => !incomingUnique.includes(id))
+      if (toDelete.length) {
+        await tx.instructorMember.deleteMany({
+          where: {
+            memberId,
+            instructorId: { in: toDelete },
+          },
+        })
+      }
+
+      const toInsert = incomingUnique.filter((id) => !existingIds.includes(id))
+      if (toInsert.length) {
+        await tx.instructorMember.createMany({
+          data: toInsert.map((instructorId) => ({
+            memberId,
+            instructorId,
+          })),
+        })
+      }
+    })
+
+    revalidatePath('/admin/members')
+    revalidatePath('/instructor/members')
+
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error, '강사 배정 중 오류가 발생했습니다'),
+    }
+  }
+}
+

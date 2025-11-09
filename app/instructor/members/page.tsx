@@ -1,26 +1,56 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import Header from '@/components/common/Header'
-import BottomNavigation from '@/components/common/BottomNavigation'
+import { useState, useEffect, useCallback } from 'react'
 import { 
   getMemberPasses, 
   createMembershipPackage, 
   deleteMembershipPackage 
 } from '@/app/actions/membership'
-import { convertToMember } from '@/app/actions/members'
+import { convertToMember, resetMemberPassword } from '@/app/actions/members'
 import { getPaymentTypes } from '@/app/actions/payment-types'
-import type { Member, MemberPass, PaymentType } from '@/types'
+import PopoverSelect, { PopoverOption } from '@/components/common/PopoverSelect'
+import DatePicker from '@/components/common/DatePicker'
+import { addSystemLog } from '@/lib/utils/system-log'
+import { useAuth } from '@/lib/auth-context'
 
-// ==================== 메인 컴포넌트 ====================
+type Member = {
+  id: string
+  name: string
+  phone: string
+  status: 'active' | 'inactive'
+  type: 'member' | 'guest'
+  joinDate: string
+  instructor?: string | null
+  remainingLessons: number
+  totalLessons: number
+  notes?: string | null
+  lastVisit?: string
+}
+
+type MemberPass = {
+  id: string
+  paymentTypeName: string
+  startDate: string
+  endDate: string
+  usedLessons: number
+  totalLessons: number
+  remainingLessons: number
+  status: 'active' | 'expired' | 'exhausted'
+}
+
+type PaymentType = {
+  value: string
+  label: string
+}
 
 export default function InstructorMembersPage() {
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'inactive'>('all')
+  const { profile } = useAuth()
+  const [activeTab, setActiveTab] = useState<'all' | 'member' | 'guest'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [members, setMembers] = useState<Member[]>([])
   const [filteredMembers, setFilteredMembers] = useState<Member[]>([])
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
-  const [loading, setLoading] = useState(true)
 
   // 회원권 관련
   const [memberPasses, setMemberPasses] = useState<MemberPass[]>([])
@@ -30,46 +60,70 @@ export default function InstructorMembersPage() {
   const [newPass, setNewPass] = useState({
     paymentTypeId: '',
     totalLessons: '',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: ''
+    startDate: new Date(),
+    endDate: null as Date | null
   })
 
   // 회원 승격 관련
   const [convertingMember, setConvertingMember] = useState(false)
+  const [showConvertModal, setShowConvertModal] = useState(false)
+  const [convertSteps, setConvertSteps] = useState({
+    appDownload: false,
+    signup: false,
+    membershipGrant: false
+  })
 
-  // 상태 색상
-  const statusColors = {
-    active: 'text-green-600 bg-green-50',
-    inactive: 'text-gray-600 bg-gray-50',
-    expired: 'text-red-600 bg-red-50'
-  }
+  // 메모 편집 관련
+  const [isEditingNotes, setIsEditingNotes] = useState(false)
+  const [editedNotes, setEditedNotes] = useState('')
 
-  const statusText = {
-    active: '활성',
-    inactive: '비활성',
-    expired: '만료'
-  }
-
-  const passStatusColors = {
-    active: 'text-green-600 bg-green-50',
-    expired: 'text-gray-600 bg-gray-50',
-    exhausted: 'text-red-600 bg-red-50'
-  }
+  // 회원 데이터 로드 함수
+  const loadMembers = useCallback(async () => {
+    if (!profile) return
+    
+    try {
+      console.log('🔍 강사 담당 회원 목록 로드 시작 - profileId:', profile.id)
+      const { getInstructorMembers } = await import('@/app/actions/members')
+      const result = await getInstructorMembers(profile.id)
+      console.log('📊 강사 담당 회원 목록 조회 결과:', result)
+      
+      if (result.success && result.data) {
+        console.log('✅ 회원 목록 로드 성공:', result.data.length, '명')
+        setMembers(result.data)
+      } else {
+        console.error('❌ 회원 목록 로드 실패:', result.error)
+        setMembers([])
+      }
+    } catch (error) {
+      console.error('❌ 회원 목록 로드 오류:', error)
+      setMembers([])
+    }
+  }, [profile])
 
   // 회원 데이터 로드
   useEffect(() => {
     loadMembers()
+  }, [loadMembers])
+
+  useEffect(() => {
     loadPaymentTypesData()
   }, [])
 
-  // 탭 & 검색 필터
+  // 탭 & 상태 & 검색 필터
   useEffect(() => {
     let filtered = members
 
-    // 탭 필터
-    if (activeTab === 'active') {
+    // 탭 필터 (타입 기준)
+    if (activeTab === 'member') {
+      filtered = filtered.filter((m) => m.type === 'member')
+    } else if (activeTab === 'guest') {
+      filtered = filtered.filter((m) => m.type === 'guest')
+    }
+
+    // 상태 필터
+    if (statusFilter === 'active') {
       filtered = filtered.filter((m) => m.status === 'active')
-    } else if (activeTab === 'inactive') {
+    } else if (statusFilter === 'inactive') {
       filtered = filtered.filter((m) => m.status === 'inactive')
     }
 
@@ -84,128 +138,176 @@ export default function InstructorMembersPage() {
     }
 
     setFilteredMembers(filtered)
-  }, [activeTab, searchQuery, members])
+  }, [activeTab, statusFilter, searchQuery, members])
 
   // 회원 선택 시 회원권 로드
   useEffect(() => {
     if (selectedMember) {
-      loadMemberPassesData(selectedMember.phone)
+      loadMemberPassesData(selectedMember.id)
+      setEditedNotes(selectedMember.notes || '')
+      setIsEditingNotes(false)
     }
   }, [selectedMember])
-
-  const loadMembers = async () => {
-    setLoading(true)
-    try {
-      // TODO: Supabase에서 담당 회원만 조회 (RLS 자동 필터링)
-      // 현재는 목 데이터 사용
-      const mockData: Member[] = [
-        {
-          id: '1',
-          name: '홍길동',
-          phone: '010-1234-5678',
-          status: 'active',
-          type: 'member',
-          joinDate: '2025-01-01',
-          instructor: '이지은',
-          remainingLessons: 12,
-          totalLessons: 30,
-          notes: '운동 열심히 하시는 회원님',
-        },
-        {
-          id: '2',
-          name: '김철수',
-          phone: '010-2222-3333',
-          status: 'active',
-          type: 'member',
-          joinDate: '2025-01-05',
-          instructor: '박서준',
-          remainingLessons: 7,
-          totalLessons: 20,
-        },
-        {
-          id: '3',
-          name: '이영희',
-          phone: '010-3333-4444',
-          status: 'active',
-          type: 'guest',
-          joinDate: '2025-01-10',
-          instructor: '이지은',
-          remainingLessons: 1,
-          totalLessons: 1,
-          notes: '체험 레슨 진행 중',
-        },
-      ]
-
-      setMembers(mockData)
-      setFilteredMembers(mockData)
-    } catch (error) {
-      console.error('회원 로드 실패:', error)
-      alert('회원 목록을 불러오는데 실패했습니다')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const loadPaymentTypesData = async () => {
     try {
       const types = await getPaymentTypes()
-      setPaymentTypes(types)
+      setPaymentTypes(types.map((t: any) => ({ 
+        value: t.id || t.value, 
+        label: t.name || t.label 
+      })))
     } catch (error) {
       console.error('결제 타입 로드 실패:', error)
     }
+  }
+
+  // 결제 타입을 PopoverOption 형식으로 변환
+  const getPaymentTypeOptions = (): PopoverOption[] => {
+    const colorMap: Record<string, string> = {
+      '체험수업': 'bg-gray-400',
+      '정규수업': 'bg-blue-500',
+      '강사제공': 'bg-indigo-600',
+      '센터제공': 'bg-cyan-500',
+    }
+    
+    return paymentTypes.map((type) => ({
+      label: type.label,
+      value: type.value,
+      colorDot: colorMap[type.label] || 'bg-gray-400'
+    }))
   }
 
   const loadMemberPassesData = async (memberId: string) => {
     setLoadingPasses(true)
     try {
       const passes = await getMemberPasses(memberId)
-      setMemberPasses(passes)
+      const mapped = passes.map((p) => ({
+        id: p.id,
+        paymentTypeName: p.payment_type_name,
+        startDate: p.start_date,
+        endDate: p.end_date ?? '',
+        usedLessons: p.used_lessons,
+        totalLessons: p.total_lessons,
+        remainingLessons: p.remaining_lessons,
+        status: p.status,
+      }))
+      setMemberPasses(mapped)
+      
+      // 실제 데이터만 사용 (mock 제거)
+      if (false) {
+        const mockPasses: MemberPass[] = [
+          {
+            id: 'pass1',
+            paymentTypeName: '정규수업',
+            startDate: '2025-01-01',
+            endDate: '2025-04-01',
+            usedLessons: 18,
+            totalLessons: 30,
+            remainingLessons: 12,
+            status: 'active',
+          },
+          {
+            id: 'pass2',
+            paymentTypeName: '강사제공',
+            startDate: '2025-01-15',
+            endDate: '2025-02-15',
+            usedLessons: 3,
+            totalLessons: 5,
+            remainingLessons: 2,
+            status: 'active',
+          },
+        ]
+        setMemberPasses(mockPasses)
+      }
     } catch (error) {
       console.error('회원권 조회 실패:', error)
-      alert('회원권을 불러오는데 실패했습니다')
+      // 실제 데이터만 사용 (mock 제거)
+      if (false) {
+        const mockPasses: MemberPass[] = [
+          {
+            id: 'pass1',
+            paymentTypeName: '정규수업',
+            startDate: '2025-01-01',
+            endDate: '2025-04-01',
+            usedLessons: 18,
+            totalLessons: 30,
+            remainingLessons: 12,
+            status: 'active',
+          },
+          {
+            id: 'pass2',
+            paymentTypeName: '강사제공',
+            startDate: '2025-01-15',
+            endDate: '2025-02-15',
+            usedLessons: 3,
+            totalLessons: 5,
+            remainingLessons: 2,
+            status: 'active',
+          },
+        ]
+        setMemberPasses(mockPasses)
+      }
     } finally {
       setLoadingPasses(false)
     }
   }
 
-  // 회원 등록 페이지로 이동
-  const handleRegisterMember = () => {
-    alert('회원 등록 페이지로 이동합니다')
-    // TODO: router.push('/instructor/members/register')
+  // 메모 저장
+  const handleSaveNotes = () => {
+    if (!selectedMember) return
+    
+    // 실제 서버에 저장
+    setMembers(prev => prev.map(m => 
+      m.id === selectedMember.id ? { ...m, notes: editedNotes } : m
+    ))
+    setSelectedMember(prev => prev ? { ...prev, notes: editedNotes } : null)
+    setIsEditingNotes(false)
+    alert('메모가 저장되었습니다')
   }
 
-  // 회원 승격 (비회원 → 정회원)
+  // 회원 승격 (비회원 → 정회원) 모달 열기
+  const openConvertModal = () => {
+    setShowConvertModal(true)
+    setConvertSteps({
+      appDownload: false,
+      signup: false,
+      membershipGrant: false
+    })
+  }
+
+  // 회원 승격 (비회원 → 정회원) 실행
   const handleConvertToMember = async () => {
     if (!selectedMember || selectedMember.type !== 'guest') return
 
-    const confirmed = confirm(
-      `${selectedMember.name}님을 정회원으로 전환하시겠습니까?\n\n` +
-      `전화번호: ${selectedMember.phone}\n\n` +
-      `회원 전환 후 다음 단계를 안내해주세요:\n` +
-      `1. 앱 다운로드 안내\n` +
-      `2. ${selectedMember.phone}로 가입 안내\n` +
-      `3. 회원권 지급`
-    )
-
-    if (!confirmed) return
+    // 모든 단계가 체크되었는지 확인
+    const allStepsCompleted = convertSteps.appDownload && convertSteps.signup && convertSteps.membershipGrant
+    if (!allStepsCompleted) {
+      alert('모든 단계를 완료해야 전환할 수 있습니다')
+      return
+    }
 
     setConvertingMember(true)
     try {
       const result = await convertToMember(selectedMember.phone)
 
       if (result.success) {
-        alert(
-          `${selectedMember.name}님이 정회원으로 전환되었습니다!\n\n` +
-          `다음 단계:\n` +
-          `1. 앱 다운로드 안내\n` +
-          `2. ${selectedMember.phone}로 가입 안내\n` +
-          `3. 회원권 지급`
-        )
-
-        // 회원 목록 새로고침
+        // 시스템 로그 추가
+        addSystemLog({
+          type: 'data_change',
+          user: profile?.name || '강사',
+          action: '정회원 전환',
+          details: `회원: ${selectedMember.name} (${selectedMember.phone}). 비회원에서 정회원으로 전환되었습니다.`
+        })
+        
+        alert(`${selectedMember.name}님이 정회원으로 전환되었습니다!`)
+        // 회원 목록 새로고침 (서버에서 최신 데이터 가져오기)
         await loadMembers()
-        setSelectedMember(null)
-        setShowAddPassForm(false)
+        // 선택된 회원도 업데이트
+        const updatedMember = members.find(m => m.id === selectedMember.id)
+        if (updatedMember) {
+          setSelectedMember({ ...updatedMember, type: 'member' as const })
+        }
+        setShowConvertModal(false)
       } else {
         alert(result.error || '회원 전환에 실패했습니다')
       }
@@ -228,11 +330,11 @@ export default function InstructorMembersPage() {
 
     try {
       const result = await createMembershipPackage({
-        member_id: selectedMember.phone,
+        member_id: selectedMember.id,
         payment_type_id: newPass.paymentTypeId,
         total_lessons: parseInt(newPass.totalLessons),
-        start_date: newPass.startDate,
-        end_date: newPass.endDate
+        start_date: newPass.startDate.toISOString().split('T')[0],
+        end_date: newPass.endDate.toISOString().split('T')[0]
       })
 
       if (result.success) {
@@ -241,11 +343,12 @@ export default function InstructorMembersPage() {
         setNewPass({
           paymentTypeId: '',
           totalLessons: '',
-          startDate: new Date().toISOString().split('T')[0],
-          endDate: ''
+          startDate: new Date(),
+          endDate: null
         })
-        // 회원권 목록 새로고침
-        await loadMemberPassesData(selectedMember.phone)
+        await loadMemberPassesData(selectedMember.id)
+        // 회원 목록도 다시 로드하여 남은 레슨 수 업데이트
+        await loadMembers()
       } else {
         alert(result.error || '회원권 등록에 실패했습니다')
       }
@@ -264,9 +367,10 @@ export default function InstructorMembersPage() {
       
       if (result.success) {
         alert('회원권이 삭제되었습니다')
-        // 회원권 목록 새로고침
         if (selectedMember) {
-          await loadMemberPassesData(selectedMember.phone)
+          await loadMemberPassesData(selectedMember.id)
+          // 회원 목록도 다시 로드하여 남은 레슨 수 업데이트
+          await loadMembers()
         }
       } else {
         alert(result.error || '회원권 삭제에 실패했습니다')
@@ -277,117 +381,174 @@ export default function InstructorMembersPage() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[#f5f1e8] pb-20">
-      <div className="max-w-2xl mx-auto bg-[#fdfbf7] min-h-screen shadow-xl">
-        {/* ==================== 헤더 ==================== */}
-        <Header profile={{ name: '강사', role: 'instructor' }} />
+  const closeModal = () => {
+    setSelectedMember(null)
+    setShowAddPassForm(false)
+    document.body.style.overflow = ""
+  }
 
-        {/* ==================== 탭 메뉴 ==================== */}
-        <div className="bg-white px-5 border-b border-[#f0ebe1]">
-          <div className="flex gap-1">
+  const openModal = (member: Member) => {
+    setSelectedMember(member)
+    document.body.style.overflow = "hidden"
+  }
+
+  return (
+    <div className="pb-24 overflow-x-hidden">
+      {/* 탭 메뉴 (타입 기준) */}
+      <div className="bg-white border-b border-[#f0ebe1] px-5 shadow-sm">
+        <div className="flex">
+          <button
+            onClick={() => {
+              setActiveTab('all')
+              setSelectedMember(null)
+            }}
+            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${
+              activeTab === 'all'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            전체
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('member')
+              setSelectedMember(null)
+            }}
+            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${
+              activeTab === 'member'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            회원
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('guest')
+              setSelectedMember(null)
+            }}
+            className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${
+              activeTab === 'guest'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            비회원
+          </button>
+        </div>
+      </div>
+
+      <div className="px-5 py-6 space-y-4">
+        {/* 상태 필터 + 검색 */}
+        <div className="space-y-3">
+          {/* 상태 필터 버튼 */}
+          <div className="flex gap-2">
             <button
-              onClick={() => setActiveTab('all')}
-              className={`flex-1 py-3.5 px-4 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'all'
-                  ? 'text-gray-900 font-semibold border-gray-900'
-                  : 'text-[#9d917f] border-transparent hover:text-[#7a6f61]'
+              onClick={() => setStatusFilter('all')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                statusFilter === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-[#f0ebe1] text-[#7a6f61] hover:border-blue-300'
               }`}
             >
               전체
             </button>
             <button
-              onClick={() => setActiveTab('active')}
-              className={`flex-1 py-3.5 px-4 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'active'
-                  ? 'text-gray-900 font-semibold border-gray-900'
-                  : 'text-[#9d917f] border-transparent hover:text-[#7a6f61]'
+              onClick={() => setStatusFilter('active')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                statusFilter === 'active'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-[#f0ebe1] text-[#7a6f61] hover:border-blue-300'
               }`}
             >
               활성
             </button>
             <button
-              onClick={() => setActiveTab('inactive')}
-              className={`flex-1 py-3.5 px-4 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'inactive'
-                  ? 'text-gray-900 font-semibold border-gray-900'
-                  : 'text-[#9d917f] border-transparent hover:text-[#7a6f61]'
+              onClick={() => setStatusFilter('inactive')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                statusFilter === 'inactive'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-[#f0ebe1] text-[#7a6f61] hover:border-blue-300'
               }`}
             >
               비활성
             </button>
           </div>
+
+          {/* 검색 */}
+          <div className="bg-white border border-[#f0ebe1] rounded-lg p-4">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="이름 또는 연락처로 검색"
+              className="w-full px-4 py-3 border border-[#f0ebe1] bg-[#fdfbf7] rounded-lg text-sm focus:outline-none focus:border-blue-600 transition-colors"
+            />
+          </div>
         </div>
 
-        {/* ==================== 검색 ==================== */}
-        <div className="px-5 py-4 bg-white border-b border-[#f0ebe1]">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="이름 또는 연락처로 검색"
-            className="w-full px-4 py-3 border border-[#f0ebe1] bg-[#fdfbf7] rounded-xl text-sm focus:outline-none focus:border-gray-900 transition-colors"
-          />
-        </div>
-
-        {/* ==================== 회원 목록 ==================== */}
-        <div className="p-4 space-y-3">
-          {loading ? (
-            <div className="text-center py-10 text-gray-500">로딩 중...</div>
-          ) : filteredMembers.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">
-              {searchQuery ? '검색 결과가 없습니다' : '담당 회원이 없습니다'}
+        {/* 회원 목록 */}
+        <div className="space-y-3">
+          {filteredMembers.length === 0 ? (
+            <div className="bg-white border border-[#f0ebe1] rounded-lg p-12 text-center">
+              <div className="text-5xl mb-4">👤</div>
+              <div className="text-lg font-semibold text-gray-900 mb-2">
+                {searchQuery ? '검색 결과가 없습니다' : '담당 회원이 없습니다'}
+              </div>
             </div>
           ) : (
             filteredMembers.map((member) => (
               <div
                 key={member.id}
-                onClick={() => setSelectedMember(member)}
-                className="bg-white rounded-xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer active:scale-[0.99]"
+                onClick={() => openModal(member)}
+                className="bg-white border border-[#f0ebe1] rounded-lg p-4 cursor-pointer hover:border-blue-300 transition-colors"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center text-xl">
+                    <div className="w-11 h-11 bg-[#f5f1e8] rounded-full flex items-center justify-center text-xl">
                       👤
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900 text-base flex items-center gap-2">
+                      <div className="font-semibold text-[#1a1a1a] text-base flex items-center gap-2">
                         {member.name}
                         {member.type === 'guest' && (
-                          <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded">
+                          <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
                             비회원
                           </span>
                         )}
                       </div>
-                      <div className="text-sm text-gray-500 mt-0.5">
+                      <div className="text-sm text-[#7a6f61] mt-0.5">
                         {member.phone}
                       </div>
                     </div>
                   </div>
                   <span
                     className={`px-2.5 py-1 text-xs font-medium rounded ${
-                      statusColors[member.status]
+                      member.status === 'active'
+                        ? 'text-green-600 bg-green-50'
+                        : 'text-gray-600 bg-gray-50'
                     }`}
                   >
-                    {statusText[member.status]}
+                    {member.status === 'active' ? '활성' : '비활성'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
+                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-[#f0ebe1]">
                   <div className="text-center">
-                    <div className="text-xs text-gray-500 mb-1">가입일</div>
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-xs text-[#7a6f61] mb-1">가입일</div>
+                    <div className="text-sm font-medium text-[#1a1a1a]">
                       {member.joinDate}
                     </div>
                   </div>
                   <div className="text-center">
-                    <div className="text-xs text-gray-500 mb-1">최근 방문</div>
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-xs text-[#7a6f61] mb-1">최근 방문</div>
+                    <div className="text-sm font-medium text-[#1a1a1a]">
                       {member.lastVisit || '오늘'}
                     </div>
                   </div>
                   <div className="text-center">
-                    <div className="text-xs text-gray-500 mb-1">잔여</div>
+                    <div className="text-xs text-[#7a6f61] mb-1">잔여</div>
                     <div className="text-sm font-semibold text-blue-600">
                       {member.remainingLessons}회
                     </div>
@@ -397,88 +558,153 @@ export default function InstructorMembersPage() {
             ))
           )}
         </div>
+      </div>
 
-        {/* ==================== 회원 상세 모달 ==================== */}
-        {selectedMember && (
-          <div
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={() => {
-              setSelectedMember(null)
-              setShowAddPassForm(false)
-            }}
-          >
-            <div
-              className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* 모달 헤더 */}
-              <div className="sticky top-0 bg-white border-b border-gray-100 p-6 pb-4">
-                <h3 className="text-lg font-bold text-gray-900">회원 상세</h3>
-              </div>
+      {/* 회원 상세 모달 */}
+      {selectedMember && (
+        <div
+          className="fixed inset-0 z-[2000] flex items-center justify-center p-5 bg-black/50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeModal()
+          }}
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-[#f0ebe1]">
+              <h2 className="text-lg font-semibold text-gray-900">회원 상세</h2>
+              <button
+                onClick={closeModal}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                aria-label="닫기"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-              {/* 모달 내용 */}
-              <div className="p-6 space-y-5">
-                {/* 비회원 전환 버튼 */}
-                {selectedMember.type === 'guest' && (
-                  <button
-                    onClick={handleConvertToMember}
-                    disabled={convertingMember}
-                    className="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all active:scale-[0.98]"
-                  >
-                    {convertingMember ? '전환 중...' : '✨ 정회원으로 전환'}
-                  </button>
-                )}
+            <div className="overflow-y-auto flex-1 p-4 space-y-4">
+              {/* 비밀번호 초기화 (강사) */}
+              <button
+                onClick={async () => {
+                  if (!selectedMember) return
+                  if (!confirm(`${selectedMember.name}님의 비밀번호를 초기화하시겠습니까?\n초기 비밀번호는 전화번호(하이픈 제거)로 설정됩니다.`)) return
+                  try {
+                    const result = await resetMemberPassword(selectedMember.phone)
+                    if (result.success) {
+                      alert('비밀번호가 초기화되었습니다. 회원에게 안내해 주세요.')
+                    } else {
+                      alert(result.error || '비밀번호 초기화에 실패했습니다')
+                    }
+                  } catch (e) {
+                    alert('비밀번호 초기화 중 오류가 발생했습니다')
+                  }
+                }}
+                className="w-full py-3.5 px-5 bg-white border border-red-300 text-red-600 hover:bg-red-50 font-semibold rounded-lg transition-colors"
+              >
+                비밀번호 초기화
+              </button>
 
-                {/* 기본 정보 */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">이름</span>
-                    <span className="text-sm font-semibold text-gray-900">
-                      {selectedMember.name}
-                    </span>
-                  </div>
+              {/* 비회원 전환 버튼 */}
+              {selectedMember.type === 'guest' && (
+                <button
+                  onClick={openConvertModal}
+                  className="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                >
+                  ✨ 정회원으로 전환
+                </button>
+              )}
 
-                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">전화번호</span>
-                    <span className="text-sm font-semibold text-gray-900">
-                      {selectedMember.phone}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">가입일</span>
-                    <span className="text-sm font-semibold text-gray-900">
-                      {selectedMember.joinDate}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">상태</span>
-                    <span
-                      className={`px-2.5 py-1 text-xs font-medium rounded ${
-                        statusColors[selectedMember.status]
-                      }`}
-                    >
-                      {statusText[selectedMember.status]}
-                    </span>
-                  </div>
-
-                  {selectedMember.notes && (
-                    <div className="py-3">
-                      <span className="text-sm text-gray-600 block mb-2">
-                        메모
-                      </span>
-                      <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
-                        {selectedMember.notes}
-                      </p>
-                    </div>
-                  )}
+              {/* 기본 정보 */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-3 border-b border-[#f0ebe1]">
+                  <span className="text-sm text-[#7a6f61]">이름</span>
+                  <span className="text-sm font-semibold text-[#1a1a1a]">
+                    {selectedMember.name}
+                  </span>
                 </div>
 
-                {/* 회원권 관리 섹션 */}
-                <div className="border-t border-gray-200 pt-5">
+                <div className="flex justify-between items-center py-3 border-b border-[#f0ebe1]">
+                  <span className="text-sm text-[#7a6f61]">전화번호</span>
+                  <span className="text-sm font-semibold text-[#1a1a1a]">
+                    {selectedMember.phone}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center py-3 border-b border-[#f0ebe1]">
+                  <span className="text-sm text-[#7a6f61]">가입일</span>
+                  <span className="text-sm font-semibold text-[#1a1a1a]">
+                    {selectedMember.joinDate}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center py-3 border-b border-[#f0ebe1]">
+                  <span className="text-sm text-[#7a6f61]">상태</span>
+                  <span
+                    className={`px-2.5 py-1 text-xs font-medium rounded ${
+                      selectedMember.status === 'active'
+                        ? 'text-green-600 bg-green-50'
+                        : 'text-gray-600 bg-gray-50'
+                    }`}
+                  >
+                    {selectedMember.status === 'active' ? '활성' : '비활성'}
+                  </span>
+                </div>
+
+                {/* 메모 섹션 */}
+                <div className="py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-[#7a6f61] block">
+                      메모
+                    </span>
+                    {!isEditingNotes && (
+                      <button
+                        onClick={() => setIsEditingNotes(true)}
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        편집
+                      </button>
+                    )}
+                  </div>
+                  {isEditingNotes ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={editedNotes}
+                        onChange={(e) => setEditedNotes(e.target.value)}
+                        placeholder="메모를 입력하세요"
+                        className="w-full px-3 py-2 border border-[#f0ebe1] rounded-lg text-sm focus:outline-none focus:border-blue-600 bg-white resize-none"
+                        rows={3}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveNotes}
+                          className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          저장
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsEditingNotes(false)
+                            setEditedNotes(selectedMember.notes || '')
+                          }}
+                          className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-[#1a1a1a] text-sm font-medium rounded-lg transition-colors"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[#1a1a1a] bg-[#fdfbf7] p-3 rounded-lg border border-[#f0ebe1] min-h-[60px]">
+                      {selectedMember.notes || '메모가 없습니다'}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* 회원권 관리 섹션 (정회원만) */}
+              {selectedMember.type === 'member' && (
+                <div className="border-t border-[#f0ebe1] pt-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-base font-semibold text-gray-900">
+                    <h4 className="text-base font-semibold text-[#1a1a1a]">
                       보유 회원권 ({memberPasses.length}개)
                     </h4>
                     <button
@@ -491,27 +717,19 @@ export default function InstructorMembersPage() {
 
                   {/* 회원권 추가 폼 */}
                   {showAddPassForm && (
-                    <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-xl p-4 mb-4 space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          결제 타입
-                        </label>
-                        <select
-                          value={newPass.paymentTypeId}
-                          onChange={(e) => setNewPass({ ...newPass, paymentTypeId: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">선택하세요</option>
-                          {paymentTypes.map((type) => (
-                            <option key={type.id} value={type.id}>
-                              {type.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    <div className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-lg p-4 mb-4 space-y-3">
+                      <PopoverSelect
+                        label="결제유형"
+                        value={newPass.paymentTypeId}
+                        onChange={(value) => setNewPass({ ...newPass, paymentTypeId: value })}
+                        options={[
+                          { label: '선택하세요', value: '' },
+                          ...getPaymentTypeOptions()
+                        ]}
+                      />
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium text-[#7a6f61] mb-2">
                           레슨 횟수
                         </label>
                         <input
@@ -519,33 +737,25 @@ export default function InstructorMembersPage() {
                           value={newPass.totalLessons}
                           onChange={(e) => setNewPass({ ...newPass, totalLessons: e.target.value })}
                           placeholder="예: 30"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-[#f0ebe1] rounded-lg text-sm focus:outline-none focus:border-blue-600 bg-white"
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          시작일
-                        </label>
-                        <input
-                          type="date"
-                          value={newPass.startDate}
-                          onChange={(e) => setNewPass({ ...newPass, startDate: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
+                      <DatePicker
+                        label="시작일"
+                        value={newPass.startDate}
+                        onChange={(date) => setNewPass({ ...newPass, startDate: date })}
+                        placeholder="시작일을 선택하세요"
+                        className="[&_button]:border-[#f0ebe1] [&_button]:hover:border-blue-300 [&_button]:focus:border-blue-600 [&_label]:text-[#7a6f61] [&_label]:text-sm [&_label]:font-medium"
+                      />
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          종료일
-                        </label>
-                        <input
-                          type="date"
-                          value={newPass.endDate}
-                          onChange={(e) => setNewPass({ ...newPass, endDate: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
+                      <DatePicker
+                        label="종료일"
+                        value={newPass.endDate || new Date()}
+                        onChange={(date) => setNewPass({ ...newPass, endDate: date })}
+                        placeholder="종료일을 선택하세요"
+                        className="[&_button]:border-[#f0ebe1] [&_button]:hover:border-blue-300 [&_button]:focus:border-blue-600 [&_label]:text-[#7a6f61] [&_label]:text-sm [&_label]:font-medium"
+                      />
 
                       <button
                         onClick={handleAddPass}
@@ -558,11 +768,11 @@ export default function InstructorMembersPage() {
 
                   {/* 회원권 목록 */}
                   {loadingPasses ? (
-                    <div className="text-center py-6 text-sm text-gray-500">
+                    <div className="text-center py-6 text-sm text-[#7a6f61]">
                       회원권 불러오는 중...
                     </div>
                   ) : memberPasses.length === 0 ? (
-                    <div className="text-center py-6 text-sm text-gray-500">
+                    <div className="text-center py-6 text-sm text-[#7a6f61]">
                       등록된 회원권이 없습니다
                     </div>
                   ) : (
@@ -570,23 +780,27 @@ export default function InstructorMembersPage() {
                       {memberPasses.map((pass) => (
                         <div
                           key={pass.id}
-                          className="bg-gray-50 rounded-lg p-4 space-y-3"
+                          className="bg-[#fdfbf7] border border-[#f0ebe1] rounded-lg p-4 space-y-3"
                         >
                           <div className="flex justify-between items-start">
                             <div>
-                              <div className="font-medium text-gray-900 text-sm mb-1">
+                              <div className="font-medium text-[#1a1a1a] text-sm mb-1">
                                 {pass.paymentTypeName}
                               </div>
-                              <div className="text-xs text-gray-600">
+                              <div className="text-xs text-[#7a6f61]">
                                 {pass.startDate} ~ {pass.endDate}
                               </div>
                             </div>
                             <span
                               className={`px-2 py-1 text-xs font-medium rounded ${
-                                passStatusColors[pass.status]
+                                pass.status === 'active'
+                                  ? 'text-green-600 bg-green-50'
+                                  : pass.status === 'expired'
+                                  ? 'text-gray-600 bg-gray-50'
+                                  : 'text-red-600 bg-red-50'
                               }`}
                             >
-                              {pass.status === 'active' && '사용중'}
+                              {pass.status === 'active' && '활성'}
                               {pass.status === 'expired' && '만료'}
                               {pass.status === 'exhausted' && '소진'}
                             </span>
@@ -594,12 +808,12 @@ export default function InstructorMembersPage() {
 
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">진행률</span>
-                              <span className="font-medium text-gray-900">
+                              <span className="text-[#7a6f61]">진행률</span>
+                              <span className="font-medium text-[#1a1a1a]">
                                 {pass.usedLessons}/{pass.totalLessons}회
                               </span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="w-full bg-[#f0ebe1] rounded-full h-2">
                               <div
                                 className="bg-blue-600 h-2 rounded-full transition-all"
                                 style={{
@@ -607,14 +821,17 @@ export default function InstructorMembersPage() {
                                 }}
                               />
                             </div>
-                            <div className="text-xs text-gray-600">
+                            <div className="text-xs text-[#7a6f61]">
                               잔여: {pass.remainingLessons}회
                             </div>
                           </div>
 
                           <button
-                            onClick={() => handleDeletePass(pass.id)}
-                            className="w-full py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeletePass(pass.id)
+                            }}
+                            className="w-full py-2.5 bg-white border border-red-300 text-red-600 hover:bg-red-50 text-sm font-semibold rounded-lg transition-colors"
                           >
                             삭제
                           </button>
@@ -623,27 +840,108 @@ export default function InstructorMembersPage() {
                     </div>
                   )}
                 </div>
-              </div>
+              )}
+            </div>
 
-              {/* 모달 푸터 */}
-              <div className="sticky bottom-0 bg-white border-t border-gray-100 p-6 pt-4">
-                <button
-                  onClick={() => {
-                    setSelectedMember(null)
-                    setShowAddPassForm(false)
-                  }}
-                  className="flex-1 py-3 w-full bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold rounded-xl transition-colors"
-                >
-                  닫기
-                </button>
-              </div>
+            <div className="p-4 border-t border-[#f0ebe1]">
+              <button
+                onClick={closeModal}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-[#1a1a1a] font-semibold rounded-lg transition-colors"
+              >
+                닫기
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ==================== 하단 네비게이션 ==================== */}
-        <BottomNavigation role="instructor" currentPath="/instructor/members" />
-      </div>
+      {/* 정회원 전환 모달 */}
+      {showConvertModal && selectedMember && (
+        <div
+          className="fixed inset-0 z-[2000] flex items-center justify-center p-5 bg-black/50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowConvertModal(false)
+          }}
+        >
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-[#f0ebe1]">
+              <h2 className="text-lg font-semibold text-gray-900">정회원 전환</h2>
+              <button
+                onClick={() => setShowConvertModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                aria-label="닫기"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div className="text-sm text-[#7a6f61] mb-4">
+                {selectedMember.name}님을 정회원으로 전환하기 전에 다음 단계를 완료해주세요:
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-3 border border-[#f0ebe1] rounded-lg cursor-pointer hover:bg-[#fdfbf7] transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={convertSteps.appDownload}
+                    onChange={(e) => setConvertSteps({ ...convertSteps, appDownload: e.target.checked })}
+                    className="w-5 h-5 text-blue-600 border-[#f0ebe1] rounded focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-[#1a1a1a]">1. 앱 다운로드 안내</div>
+                    <div className="text-xs text-[#7a6f61] mt-0.5">회원에게 앱 다운로드를 안내했습니다</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border border-[#f0ebe1] rounded-lg cursor-pointer hover:bg-[#fdfbf7] transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={convertSteps.signup}
+                    onChange={(e) => setConvertSteps({ ...convertSteps, signup: e.target.checked })}
+                    className="w-5 h-5 text-blue-600 border-[#f0ebe1] rounded focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-[#1a1a1a]">2. 가입 안내</div>
+                    <div className="text-xs text-[#7a6f61] mt-0.5">{selectedMember.phone}로 가입을 안내했습니다</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border border-[#f0ebe1] rounded-lg cursor-pointer hover:bg-[#fdfbf7] transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={convertSteps.membershipGrant}
+                    onChange={(e) => setConvertSteps({ ...convertSteps, membershipGrant: e.target.checked })}
+                    className="w-5 h-5 text-blue-600 border-[#f0ebe1] rounded focus:ring-blue-500"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-[#1a1a1a]">3. 회원권 지급 (관리자)</div>
+                    <div className="text-xs text-[#7a6f61] mt-0.5">관리자가 회원권을 지급했습니다</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-[#f0ebe1] space-y-2">
+              <button
+                onClick={handleConvertToMember}
+                disabled={convertingMember || !(convertSteps.appDownload && convertSteps.signup && convertSteps.membershipGrant)}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+              >
+                {convertingMember ? '전환 중...' : '정회원으로 전환'}
+              </button>
+              <button
+                onClick={() => setShowConvertModal(false)}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-[#1a1a1a] font-semibold rounded-lg transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

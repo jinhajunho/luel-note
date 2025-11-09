@@ -29,3 +29,8 @@ export function normalizePhone(phone: string): string {
   // 숫자만 추출하여 반환
   return phone.replace(/\D/g, '')
 }
+
+export function phoneToEmail(phone: string): string {
+  const normalized = normalizePhone(phone)
+  return `${normalized}@luel.note`
+}

@@ -1,4 +1,7 @@
-type Role = 'admin' | 'instructor' | 'member';
+import { normalizePhone } from '@/lib/auth-helpers'
+import { prisma } from '@/lib/db/prisma'
+
+type Role = 'admin' | 'instructor' | 'member' | 'guest';
 
 // 역할별 기본 권한 정의
 export const DEFAULT_PERMISSIONS = {
@@ -26,6 +29,14 @@ export const DEFAULT_PERMISSIONS = {
     menu_settlements: false,
     menu_settings: true,
   },
+  guest: {
+    menu_dashboard: true,
+    menu_attendance: true,
+    menu_members: false,
+    menu_classes: false,
+    menu_settlements: false,
+    menu_settings: true,
+  },
 };
 
 // 역할별 설명
@@ -33,6 +44,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   admin: '관리자',
   instructor: '강사',
   member: '회원',
+  guest: '비회원',
 };
 
 // 메뉴 설명
@@ -58,7 +70,7 @@ export function getDataFilter(role: Role, userPhone: string) {
     };
   }
 
-  if (role === 'member') {
+  if (role === 'member' || role === 'guest') {
     // 회원은 본인 것만
     return {
       member_id: userPhone,
@@ -74,40 +86,61 @@ export async function isInstructorOfMember(
   memberPhone: string
 ): Promise<boolean> {
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/instructor_members?instructor_id=eq.${instructorPhone}&member_id=eq.${memberPhone}`,
-      {
-        headers: {
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        }
-      }
-    );
-    const data = await response.json();
-    return Array.isArray(data) && data.length > 0;
+    const [instructor, member] = await Promise.all([
+      prisma.profile.findUnique({
+        where: { phone: normalizePhone(instructorPhone) },
+        select: { id: true },
+      }),
+      prisma.profile.findUnique({
+        where: { phone: normalizePhone(memberPhone) },
+        select: { id: true },
+      }),
+    ])
+
+    if (!instructor || !member) {
+      return false
+    }
+
+    const assignment = await prisma.instructorMember.findFirst({
+      where: {
+        instructorId: instructor.id,
+        member: {
+          profileId: member.id,
+        },
+      },
+      select: { id: true },
+    })
+
+    return Boolean(assignment)
   } catch (error) {
-    console.error('담당 회원 체크 오류:', error);
-    return false;
+    console.error('담당 회원 체크 오류:', error)
+    return false
   }
 }
 
 // 회원의 잔여 회원권 체크
 export async function checkMemberHasPasses(memberPhone: string): Promise<boolean> {
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/check_member_has_passes`,
-      {
-        method: 'POST',
-        headers: {
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ member_phone: memberPhone })
-      }
-    );
-    const hasPass = await response.json();
-    return hasPass === true;
+    const member = await prisma.member.findUnique({
+      where: { phone: normalizePhone(memberPhone) },
+      select: { id: true },
+    })
+
+    if (!member) {
+      return false
+    }
+
+    const count = await prisma.membershipPackage.count({
+      where: {
+        memberId: member.id,
+        status: 'active',
+        remainingLessons: { gt: 0 },
+      },
+    })
+
+    return count > 0
   } catch (error) {
-    console.error('회원권 체크 오류:', error);
-    return false;
+    console.error('회원권 체크 오류:', error)
+    return false
   }
 }

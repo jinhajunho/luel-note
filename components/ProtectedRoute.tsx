@@ -34,13 +34,15 @@ export default function ProtectedRoute({
 
     // 역할 체크
     if (requireRole && profile.role !== requireRole) {
-      router.push('/dashboard');
+      const fallback = profile.role === 'admin' ? '/admin/schedule' : profile.role === 'instructor' ? '/instructor/schedule' : '/member/schedule';
+      router.push(fallback);
       return;
     }
 
     // 메뉴 권한 체크
     if (requireMenu && !canAccessMenu(requireMenu)) {
-      router.push('/dashboard');
+      const fallback = profile.role === 'admin' ? '/admin/schedule' : profile.role === 'instructor' ? '/instructor/schedule' : '/member/schedule';
+      router.push(fallback);
       return;
     }
   }, [user, profile, loading, requireMenu, requireRole, router, canAccessMenu, checkingPass, hasMemberPass, isMember]);

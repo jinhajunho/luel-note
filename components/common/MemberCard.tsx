@@ -1,9 +1,13 @@
 // components/common/MemberCard.tsx
+import { memberStatusColors } from '@/lib/tokens'
+
+type MemberStatus = '활성' | '만료' | '소진'
+
 interface MemberCardProps {
   name: string
   phone: string
   remainingLessons: number
-  status?: string
+  status?: MemberStatus
   onClick?: () => void
   className?: string
 }
@@ -16,13 +20,7 @@ export default function MemberCard({
   onClick,
   className = '',
 }: MemberCardProps) {
-  const statusColors: Record<string, string> = {
-    활성: 'bg-green-50 text-green-600',
-    만료: 'bg-gray-100 text-gray-600',
-    소진: 'bg-red-50 text-red-600',
-  }
-
-  const statusColor = statusColors[status] || 'bg-gray-100 text-gray-600'
+  const statusColor = memberStatusColors[status] || memberStatusColors.활성
 
   return (
     <div

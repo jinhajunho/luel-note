@@ -1,3 +1,5 @@
+import { formatInstructorName } from '@/lib/utils/text'
+
 interface Member {
   id: string
   name: string
@@ -42,7 +44,7 @@ export default function AttendanceCard({
         <div className={`px-3 py-1 text-xs font-bold rounded-full ${typeColorClasses[lessonTypeColor as keyof typeof typeColorClasses]}`}>
           {lessonType}
         </div>
-        <div className="text-sm text-gray-600">{instructor}</div>
+        <div className="text-sm text-gray-600">{formatInstructorName(instructor)}</div>
       </div>
 
       {/* 회원 목록 */}

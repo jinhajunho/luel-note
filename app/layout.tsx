@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Luel Note',
   description: '스튜디오 관리 시스템',
+  icons: {
+    icon: '/favicon.ico',
+  },
 }
 
 export default function RootLayout({

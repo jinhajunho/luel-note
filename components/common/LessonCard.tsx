@@ -1,5 +1,6 @@
 // components/common/LessonCard.tsx
 import StatusBadge from './StatusBadge'
+import { formatInstructorName } from '@/lib/utils/text'
 
 interface LessonCardProps {
   date: string
@@ -42,15 +43,15 @@ export default function LessonCard({
           <div className="text-[13px] text-[#7a6f61]">{time}</div>
         </div>
         <div className="flex items-center gap-1.5">
-          <StatusBadge type="class" value={classType} />
-          {paymentType && <StatusBadge type="payment" value={paymentType} />}
-          <StatusBadge type="status" value={status} />
+          <StatusBadge type="class" value={classType as any} />
+          {paymentType && <StatusBadge type="payment" value={paymentType as any} />}
+          <StatusBadge type="status" value={status as any} />
         </div>
       </div>
 
       {/* 강사 + 인원 */}
       <div className="flex items-center justify-between pt-3 border-t border-[#f5f1e8] mb-2">
-        {instructor && <div className="text-[13px] text-[#7a6f61]">강사: {instructor}</div>}
+        {instructor && <div className="text-[13px] text-[#7a6f61]">강사: {formatInstructorName(instructor)}</div>}
         <div className={`text-sm font-bold ${isFull ? 'text-green-600' : 'text-gray-900'}`}>
           {currentCount}/{maxCapacity}명
         </div>

@@ -1,25 +1,30 @@
 /**
  * 인증 관련 헬퍼 함수
- * 전화번호를 이메일로 변환하여 Supabase Auth 사용
  */
+
+const DEFAULT_FAKE_EMAIL_DOMAIN =
+  process.env.NEXT_PUBLIC_COGNITO_FAKE_EMAIL_DOMAIN ||
+  process.env.COGNITO_FAKE_EMAIL_DOMAIN ||
+  'luel-note.local'
 
 // ==================== 전화번호 <-> 이메일 변환 ====================
 
 /**
  * 전화번호를 이메일 형식으로 변환
- * @example phoneToEmail('01012345678') // '01012345678@luel.local'
+ * @example phoneToEmail('01012345678') // '01012345678@example.com'
  */
 export function phoneToEmail(phone: string): string {
   const normalized = phone.replace(/-/g, '') // 하이픈 제거
-  return `${normalized}@luel.local`
+  return `${normalized}@${DEFAULT_FAKE_EMAIL_DOMAIN}`
 }
 
 /**
  * 이메일에서 전화번호 추출
- * @example emailToPhone('01012345678@luel.local') // '01012345678'
+ * @example emailToPhone('01012345678@example.com') // '01012345678'
  */
 export function emailToPhone(email: string): string {
-  return email.replace('@luel.local', '')
+  // 앞의 로컬파트(전화번호)만 추출
+  return email.split('@')[0]
 }
 
 // ==================== 전화번호 정규화 ====================
@@ -70,4 +75,18 @@ export function validatePhone(phone: string): boolean {
   }
   
   return true
+}
+
+/**
+ * 전화번호를 E.164 형식으로 변환 (기본 국가코드 +82)
+ */
+export function phoneToE164(phone: string): string {
+  const normalized = normalizePhone(phone)
+  if (normalized.startsWith('0')) {
+    return `+82${normalized.slice(1)}`
+  }
+  if (normalized.startsWith('+')) {
+    return normalized
+  }
+  return `+${normalized}`
 }

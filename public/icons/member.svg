@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- group/users icon -->
+  <path d="M17 20h5v-2a3 3 0 00-5.356-1.857"/>
+  <path d="M17 20H7"/>
+  <path d="M7 20H2v-2a3 3 0 015.356-1.857"/>
+  <path d="M7 20v-2c0-.656.126-1.283.356-1.857"/>
+  <path d="M7.356 16.143a5.002 5.002 0 019.288 0"/>
+  <circle cx="12" cy="7" r="3"/>
+  <circle cx="21" cy="10" r="2"/>
+  <circle cx="3" cy="10" r="2"/>
+</svg>
+
+
