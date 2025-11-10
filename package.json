@@ -6,6 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
+    "postinstall": "prisma generate",
     "set-role": "tsx scripts/set-role.ts",
     "lint": "next lint"
   },
