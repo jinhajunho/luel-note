@@ -2,46 +2,34 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 import { NextResponse } from 'next/server'
-import { getIdTokenFromCookies } from '@/lib/cognito/session'
-import { decodeJwt } from '@/lib/cognito/jwt'
+
 import { prisma } from '@/lib/db/prisma'
 import { normalizePhone } from '@/lib/auth-helpers'
-
-type CognitoPayload = {
-  sub?: string
-  email?: string
-  ['custom:name']?: string
-  name?: string
-}
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 export async function GET() {
-  const idToken = await getIdTokenFromCookies()
+  const supabase = createSupabaseServerClient()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
 
-  if (!idToken) {
+  if (error || !user) {
     return NextResponse.json({ authenticated: false }, { status: 401 })
   }
 
-  let payload: CognitoPayload
-  try {
-    payload = decodeJwt<CognitoPayload>(idToken)
-  } catch (error) {
-    console.error('ID 토큰 디코딩 실패:', error)
-    return NextResponse.json({ authenticated: false }, { status: 401 })
-  }
+  const userMetadata =
+    (user.user_metadata && typeof user.user_metadata === 'object' ? user.user_metadata : {}) ?? {}
 
-  const authId = payload.sub
-  const email = payload.email
-  const phoneCandidate = email ? normalizePhone(email.split('@')[0]) : undefined
-
-  if (!authId && !phoneCandidate) {
-    return NextResponse.json({ authenticated: false }, { status: 401 })
-  }
+  const metadataPhone = userMetadata.phone ? normalizePhone(String(userMetadata.phone)) : ''
+  const emailPhone = user.email ? normalizePhone(user.email.split('@')[0]) : ''
+  const phoneCandidate = metadataPhone || emailPhone
 
   try {
     const profile = await prisma.profile.findFirst({
       where: {
         OR: [
-          ...(authId ? [{ authId }] : []),
+          { authId: user.id },
           ...(phoneCandidate ? [{ phone: phoneCandidate }] : []),
         ],
       },
@@ -79,15 +67,18 @@ export async function GET() {
       }
     })
 
-    const fallbackName = payload['custom:name'] ?? payload.name ?? profile.name
+    const contactEmail =
+      (typeof userMetadata.contact_email === 'string' && userMetadata.contact_email) || user.email
+    const displayName =
+      (typeof userMetadata.name === 'string' && userMetadata.name) || profile.name
 
     return NextResponse.json({
       authenticated: true,
       user: {
-        id: authId ?? profile.id,
-        email,
-        phone: profile.phone,
-        name: fallbackName,
+        id: user.id,
+        email: contactEmail ?? undefined,
+        phone: profile.phone ?? phoneCandidate ?? undefined,
+        name: displayName ?? undefined,
       },
       profile: {
         id: profile.id,
@@ -99,8 +90,8 @@ export async function GET() {
       },
       permissions: permissionMap,
     })
-  } catch (error) {
-    console.error('세션 정보 조회 실패:', error)
+  } catch (err) {
+    console.error('세션 정보 조회 실패:', err)
     return NextResponse.json({ authenticated: false }, { status: 500 })
   }
 }

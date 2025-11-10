@@ -3,8 +3,8 @@
  */
 
 const DEFAULT_FAKE_EMAIL_DOMAIN =
-  process.env.NEXT_PUBLIC_COGNITO_FAKE_EMAIL_DOMAIN ||
-  process.env.COGNITO_FAKE_EMAIL_DOMAIN ||
+  process.env.NEXT_PUBLIC_SUPABASE_FAKE_EMAIL_DOMAIN ||
+  process.env.SUPABASE_FAKE_EMAIL_DOMAIN ||
   'luel-note.local'
 
 // ==================== 전화번호 <-> 이메일 변환 ====================

@@ -1,14 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
-import { getIdTokenFromCookies } from '@/lib/cognito/session'
-import { decodeJwt } from '@/lib/cognito/jwt'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { normalizePhone } from '@/lib/auth-helpers'
-
-interface CognitoPayload extends Record<string, unknown> {
-  sub?: string
-  email?: string
-  ['custom:name']?: string
-  name?: string
-}
 
 export type AuthenticatedProfile = {
   id: string
@@ -17,30 +9,29 @@ export type AuthenticatedProfile = {
 }
 
 export async function getAuthenticatedProfile(): Promise<AuthenticatedProfile | null> {
-  const idToken = await getIdTokenFromCookies()
-  if (!idToken) return null
+  const supabase = createSupabaseServerClient()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
 
-  let payload: CognitoPayload
-  try {
-    payload = decodeJwt<CognitoPayload>(idToken)
-  } catch (error) {
-    console.error('[auth] ID 토큰 디코딩 실패', error)
+  if (error || !user) {
     return null
   }
 
-  const authId = payload.sub
-  const email = payload.email
-  const phoneCandidate = email ? normalizePhone(email.split('@')[0]) : undefined
-
-  if (!authId && !phoneCandidate) {
-    return null
-  }
+  const authId = user.id
+  const metadataPhone =
+    typeof user.user_metadata === 'object'
+      ? normalizePhone(String(user.user_metadata.phone ?? ''))
+      : undefined
+  const emailPhone = user.email ? normalizePhone(user.email.split('@')[0]) : undefined
+  const phoneCandidate = metadataPhone || emailPhone
 
   try {
     const profile = await prisma.profile.findFirst({
       where: {
         OR: [
-          ...(authId ? [{ authId }] : []),
+          { authId },
           ...(phoneCandidate ? [{ phone: phoneCandidate }] : []),
         ],
       },

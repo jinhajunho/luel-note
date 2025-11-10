@@ -2,12 +2,10 @@
 
 import { revalidatePath } from 'next/cache'
 import type { Prisma } from '@prisma/client'
-import { AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider'
 
 import { prisma } from '@/lib/db/prisma'
 import { normalizePhone, phoneToEmail } from '@/lib/auth-helpers'
-import { getCognitoClient } from '@/lib/cognito/client'
-import { COGNITO_USER_POOL_ID } from '@/lib/config'
+import { supabaseAdminClient } from '@/lib/supabase/admin'
 
 type ConvertToMemberResult = { success: true } | { success: false; error: string }
 type SetRoleResult = { success: true } | { success: false; error: string }
@@ -345,17 +343,32 @@ export async function setProfileRole(
 export async function resetMemberPassword(memberPhone: string): Promise<ResetPasswordResult> {
   const phone = normalizePhone(memberPhone)
   const email = phoneToEmail(phone)
-  const client = getCognitoClient()
 
   try {
-    await client.send(
-      new AdminSetUserPasswordCommand({
-        UserPoolId: COGNITO_USER_POOL_ID,
-        Username: email,
-        Password: phone,
-        Permanent: true,
-      })
-    )
+    let authId: string | null = null
+
+    const profile = await prisma.profile.findUnique({
+      where: { phone },
+      select: { authId: true },
+    })
+
+    if (profile?.authId) {
+      authId = profile.authId
+    } else {
+      const { data, error } = await supabaseAdminClient.auth.admin.getUserByEmail(email)
+      if (error) {
+        throw error
+      }
+      authId = data.user?.id ?? null
+    }
+
+    if (!authId) {
+      throw new Error('사용자 정보를 찾을 수 없습니다.')
+    }
+
+    await supabaseAdminClient.auth.admin.updateUserById(authId, {
+      password: phone,
+    })
 
     return { success: true }
   } catch (error) {
