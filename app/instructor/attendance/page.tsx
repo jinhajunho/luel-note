@@ -57,6 +57,7 @@ const formatCheckInTime = (iso?: string | null) => {
 
 export default function InstructorAttendancePage() {
   const { profile, loading: authLoading } = useAuth()
+  const router = useRouter()
 
   const [activeTab, setActiveTab] = useState<TabType>('today')
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
@@ -188,6 +189,7 @@ export default function InstructorAttendancePage() {
           alert(result.message)
           return
         }
+        router.refresh()
         await loadLessons()
       } catch (err) {
         console.error('출석 처리 실패:', err)
@@ -222,6 +224,7 @@ export default function InstructorAttendancePage() {
           })
         }
         closeModal()
+        router.refresh()
         await loadLessons()
       } catch (err) {
         console.error('레슨 완료 처리 실패:', err)
@@ -263,6 +266,7 @@ export default function InstructorAttendancePage() {
           })
         }
         closeModal()
+        router.refresh()
         await loadLessons()
       } catch (err) {
         console.error('레슨 취소 처리 실패:', err)
@@ -271,7 +275,7 @@ export default function InstructorAttendancePage() {
         setActionLoading(false)
       }
     },
-    [actionLoading, lessons, instructorName, profile?.name, loadLessons]
+    [actionLoading, lessons, instructorName, profile?.name, loadLessons, router]
   )
 
   useEffect(() => {

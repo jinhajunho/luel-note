@@ -10,6 +10,7 @@ import { getAllClasses } from '@/app/actions/classes'
 import { formatInstructorName } from '@/lib/utils/text'
 import { useAuth } from '@/lib/auth-context'
 import { addSystemLog } from '@/lib/utils/system-log'
+import { useRouter } from 'next/navigation'
 
 type TabType = 'today' | 'history'
 type LessonTypeName = '인트로' | '개인레슨' | '듀엣레슨' | '그룹레슨'
@@ -56,6 +57,7 @@ const formatCheckInTime = (iso?: string | null) => {
 }
 
 export default function AdminAttendancePage() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>('today')
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -207,6 +209,8 @@ export default function AdminAttendancePage() {
           alert(result.message)
           return
         }
+        // 즉시 반영
+        router.refresh()
         await loadLessons()
       } catch (err) {
         console.error('출석 처리 실패:', err)
@@ -241,6 +245,7 @@ export default function AdminAttendancePage() {
           })
         }
         closeModal()
+        router.refresh()
         await loadLessons()
       } catch (err) {
         console.error('레슨 완료 처리 실패:', err)
@@ -282,6 +287,7 @@ export default function AdminAttendancePage() {
           })
         }
         closeModal()
+        router.refresh()
         await loadLessons()
       } catch (err) {
         console.error('레슨 취소 처리 실패:', err)
@@ -290,7 +296,7 @@ export default function AdminAttendancePage() {
         setActionLoading(false)
       }
     },
-    [actionLoading, lessons, profile?.name, loadLessons]
+    [actionLoading, lessons, profile?.name, loadLessons, router]
   )
 
   useEffect(() => {

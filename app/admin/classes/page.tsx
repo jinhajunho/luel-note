@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth-context'
 import { getAllProfiles } from '@/app/actions/members'
 import { getPaymentTypes } from '@/app/actions/payment-types'
 import { formatInstructorName } from '@/lib/utils/text'
+import { useRouter } from 'next/navigation'
 
 interface Lesson {
   id: string
@@ -38,6 +39,7 @@ interface Member {
 }
 
 export default function AdminClassesPage() {
+  const router = useRouter()
   const { profile } = useAuth()
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [filteredLessons, setFilteredLessons] = useState<Lesson[]>([])
@@ -333,6 +335,7 @@ const instructorSelectOptions: PopoverOption[] = instructors.map((instructor) =>
         return
       }
 
+      router.refresh()
       await loadLessons()
 
       const createdLesson = result.data
@@ -895,7 +898,8 @@ const instructorSelectOptions: PopoverOption[] = instructors.map((instructor) =>
                             alert(result.error || '레슨 삭제에 실패했습니다')
                             return
                           }
-                          await loadLessons()
+                      router.refresh()
+                      await loadLessons()
                           closeModal()
                           alert('레슨이 삭제되었습니다')
                         } catch (error) {

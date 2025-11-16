@@ -441,6 +441,7 @@ export default function AdminMembersPage() {
             setSelectedMember(updatedMember)
           }
         }
+        router.refresh()
       } else {
         alert(result.error || '회원권 등록에 실패했습니다')
       }
@@ -461,6 +462,7 @@ export default function AdminMembersPage() {
         alert('회원권이 삭제되었습니다')
         if (selectedMember) {
           await loadMemberPassesData(selectedMember.id)
+          router.refresh()
         }
       } else {
         alert(result.error || '회원권 삭제에 실패했습니다')
@@ -1135,6 +1137,7 @@ export default function AdminMembersPage() {
                           }
                       // 강사 목록 다시 로드
                       await loadMemberInstructors(selectedMember.id)
+                      router.refresh()
                     } else {
                       alert(result.error || '강사 배정에 실패했습니다')
                     }

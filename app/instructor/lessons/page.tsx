@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth-context'
 import { getPaymentTypes } from '@/app/actions/payment-types'
 import { getInstructorMembers } from '@/app/actions/members'
 import { formatInstructorName } from '@/lib/utils/text'
+import { useRouter } from 'next/navigation'
 
 interface Lesson {
   id: string
@@ -37,6 +38,7 @@ interface Member {
 }
 
 export default function InstructorLessonsPage() {
+  const router = useRouter()
   const { profile } = useAuth()
   const isInstructorContext =
     profile?.role === 'instructor' || profile?.role === 'admin'
@@ -371,6 +373,7 @@ export default function InstructorLessonsPage() {
         }. ${registerForm.type} 레슨이 등록되었습니다.`,
       })
 
+      router.refresh()
       await loadLessons()
       setShowRegisterModal(false)
       setRegisterForm({
@@ -976,6 +979,7 @@ export default function InstructorLessonsPage() {
                               action: '레슨 삭제',
                               details: `레슨 ID: ${selectedLesson.id}, 날짜: ${selectedLesson.date}, 시간: ${selectedLesson.startTime}-${selectedLesson.endTime}`,
                             })
+                            router.refresh()
                             await loadLessons()
                             closeModal()
                             alert('레슨이 삭제되었습니다.')
