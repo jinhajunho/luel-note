@@ -89,7 +89,13 @@ async function ensureProfile({
       })
     }
 
-    if (normalizedPhone) {
+    // 관리자/강사는 자동으로 member 레코드를 생성/동기화하지 않음
+    // (관리자/강사 로그인 시 guest 멤버 레코드가 재생성되는 현상 방지)
+    const canAttachMember =
+      normalizedPhone &&
+      (!existingProfile.role || existingProfile.role === 'guest' || existingProfile.role === 'member')
+
+    if (canAttachMember) {
       await prisma.member.upsert({
         where: { phone: normalizedPhone },
         update: {
