@@ -74,18 +74,41 @@ async function ensureProfile({
   })
 
   if (existingProfile) {
-    const updates: Partial<{ phone: string; authId: string }> = {}
-    if (!existingProfile.authId) {
-      updates.authId = authId
-    }
+    // 회원권/인트로로 생성된 placeholder(guest) 프로필을 실제 회원가입으로 승격
+    const memberByPhone = normalizedPhone
+      ? await prisma.member.findUnique({
+          where: { phone: normalizedPhone },
+          select: { id: true, type: true },
+        })
+      : null
+
+    // 업데이트 규칙:
+    // - 전화번호가 비어 있으면 채워넣음
+    // - authId를 실제 가입자의 authId로 덮어씀 (게스트 승격 시)
+    const shouldPromote =
+      memberByPhone?.type === 'guest' &&
+      (existingProfile.role === 'guest' || existingProfile.role === 'member')
+
+    const updates: Record<string, unknown> = {}
     if (normalizedPhone && !existingProfile.phone) {
       updates.phone = normalizedPhone
+    }
+    if (shouldPromote && existingProfile.authId !== authId) {
+      updates.authId = authId
     }
 
     if (Object.keys(updates).length > 0) {
       await prisma.profile.update({
         where: { id: existingProfile.id },
         data: updates,
+      })
+    }
+
+    if (shouldPromote) {
+      // 멤버도 정회원으로 승격
+      await prisma.member.update({
+        where: { phone: normalizedPhone! },
+        data: { type: 'member', status: 'active', profileId: existingProfile.id, name: fallbackName },
       })
     }
 
@@ -115,7 +138,7 @@ async function ensureProfile({
       })
     }
 
-    return existingProfile.role ?? 'guest'
+    return (shouldPromote ? 'member' : existingProfile.role) ?? 'guest'
   }
 
   if (!normalizedPhone) {
@@ -274,12 +297,11 @@ export async function signup(prevState: ActionState, formData: FormData): Promis
 
   const existingProfile = await prisma.profile.findUnique({
     where: { phone: normalizedPhone },
-    select: { authId: true },
+    select: { id: true, authId: true },
   })
 
-  if (existingProfile?.authId && !existingProfile.authId.startsWith('guest')) {
-    return { error: '이미 가입된 전화번호입니다.' }
-  }
+  // 기존에 인트로로 생성된 프로필이 있어도 회원가입 허용하고 승격 처리(ensureProfile에서 처리)
+  // 실제로 완전 가입된 계정인지 구분하기 어렵기 때문에, 여기서는 차단하지 않음.
 
   try {
     const { data, error } = await supabaseAdminClient.auth.admin.createUser({
