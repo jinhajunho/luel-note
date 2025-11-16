@@ -128,7 +128,8 @@ async function ensureProfile({
         authId,
         phone: normalizedPhone,
         name: fallbackName,
-        role: 'guest',
+        // DB 체크 제약에 따라 기본 역할은 'member'로 생성
+        role: 'member',
       },
       select: { id: true },
     })

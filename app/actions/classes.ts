@@ -285,7 +285,8 @@ export async function createClass(input: CreateClassInput): Promise<{
                 authId: `guest-${randomUUID()}`,
                 phone: normalizedPhone,
                 name: displayName,
-                role: 'guest',
+                // 프로필 테이블은 'guest'를 허용하지 않는 환경이 있어 'member'로 생성
+                role: 'member',
               },
               select: { id: true },
             })
