@@ -301,6 +301,18 @@ const instructorSelectOptions: PopoverOption[] = instructors.map((instructor) =>
       return
     }
 
+    // 시간 유효성 검증: 시작 < 종료
+    const toMinutes = (hhmm: string) => {
+      const [h, m] = hhmm.split(':').map(Number)
+      return (h || 0) * 60 + (m || 0)
+    }
+    const startMin = toMinutes(registerForm.startTime)
+    const endMin = toMinutes(registerForm.endTime)
+    if (!(startMin < endMin)) {
+      alert('시작 시간이 종료 시간보다 같거나 늦습니다. 시간을 다시 선택해주세요.')
+      return
+    }
+
     if (registerForm.type === '인트로') {
       if (!registerForm.introGuest.name || !registerForm.introGuest.phone) {
         alert('비회원 이름과 전화번호를 입력해주세요')
@@ -322,6 +334,20 @@ const instructorSelectOptions: PopoverOption[] = instructors.map((instructor) =>
     try {
       const { createClass } = await import('@/app/actions/classes')
       const dateStr = `${registerForm.date.getFullYear()}-${String(registerForm.date.getMonth() + 1).padStart(2, '0')}-${String(registerForm.date.getDate()).padStart(2, '0')}`
+
+      // 중복 등록 방지: 같은 강사·같은 날짜에서 시간 겹침
+      const overlaps = lessons.some((l) => {
+        if (l.date !== dateStr) return false
+        if ((l.instructorId || '') !== registerForm.instructorId) return false
+        const ls = toMinutes(l.startTime)
+        const le = toMinutes(l.endTime)
+        return startMin < le && endMin > ls
+      })
+      if (overlaps) {
+        alert('해당 강사의 같은 시간대에 이미 레슨이 있습니다. 다른 시간으로 선택해주세요.')
+        return
+      }
+
       const memberIds =
         registerForm.type === '인트로'
           ? []

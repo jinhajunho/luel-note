@@ -334,11 +334,36 @@ export default function InstructorLessonsPage() {
       }
     }
 
+    // 시간 유효성: 시작 < 종료
+    const toMinutes = (hhmm: string) => {
+      const [h, m] = hhmm.split(':').map(Number)
+      return (h || 0) * 60 + (m || 0)
+    }
+    const startMin = toMinutes(registerForm.startTime)
+    const endMin = toMinutes(registerForm.endTime)
+    if (!(startMin < endMin)) {
+      alert('시작 시간이 종료 시간보다 같거나 늦습니다. 시간을 다시 선택해주세요.')
+      return
+    }
+
+    // 중복 등록 방지: 같은 날짜에 본인 수업 시간 겹침
     const formatDateForSubmit = (date: Date) => {
       const year = date.getFullYear()
       const month = String(date.getMonth() + 1).padStart(2, '0')
       const day = String(date.getDate()).padStart(2, '0')
       return `${year}-${month}-${day}`
+    }
+    const submitDate = formatDateForSubmit(registerForm.date)
+    const overlaps = lessons.some((l) => {
+      if (l.date !== submitDate) return false
+      const ls = toMinutes(l.startTime)
+      const le = toMinutes(l.endTime)
+      // overlap if (start < le) && (end > ls)
+      return startMin < le && endMin > ls
+    })
+    if (overlaps) {
+      alert('해당 시간대에 이미 등록된 레슨이 있습니다. 다른 시간으로 선택해주세요.')
+      return
     }
 
     setRegistering(true)
