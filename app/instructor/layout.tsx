@@ -21,6 +21,15 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
   const targetPath = isInstructorView ? '/admin/schedule' : '/instructor/schedule'
   const targetLabel = isInstructorView ? '관리자 화면으로 전환' : '강사 화면으로 전환'
 
+  // 권한 가드: 강사/관리자만 접근 허용
+  useEffect(() => {
+    if (!profile) return
+    const allowed = profile.role === 'instructor' || profile.role === 'admin'
+    if (!allowed) {
+      router.replace('/member/schedule')
+    }
+  }, [profile, router])
+
   // 글로벌 동기화 리스너 + 백업 폴링
   useEffect(() => {
     const bus = getBus()

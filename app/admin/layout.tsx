@@ -21,6 +21,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const targetPath = isAdminView ? '/instructor/members' : '/admin/schedule'
   const targetLabel = isAdminView ? '강사 화면으로 전환' : '관리자 화면으로 전환'
 
+  // 권한 가드: 관리자만 접근 허용
+  useEffect(() => {
+    if (!profile) return
+    if (profile.role !== 'admin') {
+      // 강사는 강사 홈으로, 그 외는 회원 홈으로
+      if (profile.role === 'instructor') {
+        router.replace('/instructor/schedule')
+      } else {
+        router.replace('/member/schedule')
+      }
+    }
+  }, [profile, router])
+
   // 글로벌 동기화 리스너 + 백업 폴링
   useEffect(() => {
     const bus = getBus()
