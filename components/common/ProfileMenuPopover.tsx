@@ -11,6 +11,7 @@ import {
 import { usePathname, useRouter } from 'next/navigation'
 import { addSystemLog } from '@/lib/utils/system-log'
 import { postBus } from '@/lib/bus'
+import { getBus } from '@/lib/bus'
 import { updateEmail } from '@/app/actions/profile'
 
 type MenuKey = 'notices' | 'profile' | 'notifications'
@@ -87,6 +88,21 @@ export default function ProfileMenuPopover() {
       active = false
     }
   }, [])
+
+  // 다른 탭에서 공지 변경 시 즉시 재조회
+  useEffect(() => {
+    const bus = getBus()
+    if (!bus) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'notice-updated') {
+        fetchNotices()
+      }
+    }
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
+  }, [fetchNotices])
 
   useEffect(() => {
     const nextEmail = user?.email ?? ''

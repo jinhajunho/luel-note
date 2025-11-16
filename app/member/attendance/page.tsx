@@ -12,6 +12,7 @@ import { getMemberClasses } from '@/app/actions/member-classes'
 import { toggleAttendance } from '@/lib/actions/attendance-actions'
 import { addSystemLog } from '@/lib/utils/system-log'
 import { postBus } from '@/lib/bus'
+import { getBus } from '@/lib/bus'
 
 type LessonInfo = {
   classId: string
@@ -151,6 +152,25 @@ export default function MemberAttendancePage() {
       setLoading(false)
     }
   }, [profile])
+
+  // Cross-tab sync: attendance/class updates from other tabs
+  useEffect(() => {
+    const bus = getBus()
+    if (!bus) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'attendance-updated' || data.type === 'class-updated') {
+        ;(async () => {
+          try {
+            await loadTodayLessons()
+          } catch {}
+        })()
+      }
+    }
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
+  }, [loadTodayLessons])
 
   useEffect(() => {
     loadTodayLessons()

@@ -15,6 +15,7 @@ import { getPaymentTypes } from '@/app/actions/payment-types'
 import { formatInstructorName } from '@/lib/utils/text'
 import { useRouter } from 'next/navigation'
 import { postBus } from '@/lib/bus'
+import { getBus } from '@/lib/bus'
 
 interface Lesson {
   id: string
@@ -135,6 +136,22 @@ const instructorSelectOptions: PopoverOption[] = instructors.map((instructor) =>
       setLessons([])
     }
   }
+
+  // Cross-tab sync: class/attendance updates
+  useEffect(() => {
+    const bus = getBus()
+    if (!bus) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'class-updated' || data.type === 'attendance-updated') {
+        loadLessons()
+        router.refresh()
+      }
+    }
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
+  }, [loadLessons, router])
 
   // 회원 데이터 로드 함수
   const loadMembers = async () => {

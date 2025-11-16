@@ -15,6 +15,7 @@ import { getInstructorMembers } from '@/app/actions/members'
 import { formatInstructorName } from '@/lib/utils/text'
 import { useRouter } from 'next/navigation'
 import { postBus } from '@/lib/bus'
+import { getBus } from '@/lib/bus'
 
 interface Lesson {
   id: string
@@ -226,6 +227,22 @@ export default function InstructorLessonsPage() {
       clearInterval(interval)
     }
   }, [instructorId, isInstructorContext, profile, loadLessons, loadMembers, loadPaymentTypesData])
+
+  // Cross-tab sync: class/attendance updates
+  useEffect(() => {
+    const bus = getBus()
+    if (!bus) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'class-updated' || data.type === 'attendance-updated') {
+        loadLessons()
+        router.refresh()
+      }
+    }
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
+  }, [loadLessons, router])
 
   // 검색 및 필터링
   useEffect(() => {
