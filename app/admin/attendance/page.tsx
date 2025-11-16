@@ -305,6 +305,16 @@ export default function AdminAttendancePage() {
     }
   }, [activeTab])
 
+  // 회원/강사 쪽에서 출석 상태가 바뀌면 즉시 동기화 (브라우저 전역 이벤트 수신)
+  useEffect(() => {
+    const handler = () => {
+      loadLessons()
+      router.refresh()
+    }
+    window.addEventListener('app:attendance-updated', handler as EventListener)
+    return () => window.removeEventListener('app:attendance-updated', handler as EventListener)
+  }, [loadLessons, router])
+
   const renderCalendar = () => {
     const year = selectedDate.getFullYear()
     const month = selectedDate.getMonth() + 1

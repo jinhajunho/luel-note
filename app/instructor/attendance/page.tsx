@@ -132,6 +132,17 @@ export default function InstructorAttendancePage() {
     loadLessons()
   }, [authLoading, profile, isInstructorContext, loadLessons])
 
+  // 회원 쪽에서 출석을 변경했을 때 즉시 동기화 (브라우저 간 브로드캐스트 이벤트 수신)
+  useEffect(() => {
+    const handler = () => {
+      // 리스트를 다시 불러오고 화면 새로고침
+      loadLessons()
+      router.refresh()
+    }
+    window.addEventListener('app:attendance-updated', handler as EventListener)
+    return () => window.removeEventListener('app:attendance-updated', handler as EventListener)
+  }, [loadLessons, router])
+
   const todayKey = formatDateKey(new Date())
   const selectedDateKey = formatDateKey(selectedDate)
 

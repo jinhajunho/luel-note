@@ -235,6 +235,16 @@ export default function MemberAttendancePage() {
           details: `일시: ${lesson.startLabel} ~ ${lesson.endLabel}, 강사: ${formatInstructorName(lesson.instructor)}, 수업 유형: ${lesson.type}`,
         })
 
+        // 다른 화면(강사/관리자 출석 화면 등) 즉시 반영을 위한 브로드캐스트
+        try {
+          const evt = new CustomEvent('app:attendance-updated', {
+            detail: { classId: lesson.classId, newStatus },
+          })
+          window.dispatchEvent(evt)
+        } catch {
+          // no-op
+        }
+
         await loadTodayLessons()
       } catch (error) {
         console.error('출석 처리 실패:', error)

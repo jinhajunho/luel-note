@@ -119,8 +119,16 @@ export default function NotificationsPopover() {
       if (!preferences.notice) return
       load()
     }
+    function onNotificationsUpdated() {
+      // 다른 컴포넌트/탭에서 알림 상태가 바뀌면 다시 불러오기
+      load()
+    }
     window.addEventListener('app:new-notice', onNewNotice as EventListener)
-    return () => window.removeEventListener('app:new-notice', onNewNotice as EventListener)
+    window.addEventListener('app:notifications-updated', onNotificationsUpdated as EventListener)
+    return () => {
+      window.removeEventListener('app:new-notice', onNewNotice as EventListener)
+      window.removeEventListener('app:notifications-updated', onNotificationsUpdated as EventListener)
+    }
   }, [load, preferences.notice])
 
   const markAll = useCallback(async () => {
@@ -132,6 +140,9 @@ export default function NotificationsPopover() {
         throw new Error(`전체 읽음 처리 실패 (${res.status})`)
       }
       setItems((prev) => prev.map((item) => ({ ...item, read: true })))
+      try {
+        window.dispatchEvent(new CustomEvent('app:notifications-updated'))
+      } catch {}
     } catch (error) {
       console.error('알림 전체 읽음 실패:', error)
       alert('알림을 전체 읽음으로 표시하지 못했습니다.')
@@ -155,6 +166,9 @@ export default function NotificationsPopover() {
         if (!res.ok) {
           throw new Error(`알림 상태 변경 실패 (${res.status})`)
         }
+        try {
+          window.dispatchEvent(new CustomEvent('app:notifications-updated'))
+        } catch {}
       } catch (error) {
         console.error('알림 읽음 토글 실패:', error)
         setItems((prev) => prev.map((item) => (item.id === id ? { ...item, read: target.read } : item)))
@@ -173,6 +187,9 @@ export default function NotificationsPopover() {
         if (!res.ok) {
           throw new Error(`알림 삭제 실패 (${res.status})`)
         }
+        try {
+          window.dispatchEvent(new CustomEvent('app:notifications-updated'))
+        } catch {}
       } catch (error) {
         console.error('알림 삭제 실패:', error)
         alert('알림을 삭제하지 못했습니다.')
