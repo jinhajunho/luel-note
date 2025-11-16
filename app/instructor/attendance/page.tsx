@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context'
 import { getAllClasses } from '@/app/actions/classes'
 import { formatInstructorName } from '@/lib/utils/text'
 import { usePathname, useRouter } from 'next/navigation'
+import { getBus } from '@/lib/bus'
 import { addSystemLog } from '@/lib/utils/system-log'
 
 type TabType = 'today' | 'history'
@@ -134,13 +135,18 @@ export default function InstructorAttendancePage() {
 
   // 회원 쪽에서 출석을 변경했을 때 즉시 동기화 (브라우저 간 브로드캐스트 이벤트 수신)
   useEffect(() => {
-    const handler = () => {
-      // 리스트를 다시 불러오고 화면 새로고침
-      loadLessons()
-      router.refresh()
+    const bus = getBus()
+    if (!bus) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'attendance-updated' || data.type === 'class-updated') {
+        loadLessons()
+        router.refresh()
+      }
     }
-    window.addEventListener('app:attendance-updated', handler as EventListener)
-    return () => window.removeEventListener('app:attendance-updated', handler as EventListener)
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
   }, [loadLessons, router])
 
   const todayKey = formatDateKey(new Date())

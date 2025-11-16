@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { getNotificationPreferences as fetchNotificationPrefs } from '@/app/actions/notification-preferences'
+import { getBus } from '@/lib/bus'
 import { Bell, CheckCircle2, XCircle } from 'lucide-react'
 
 type Notification = {
@@ -115,20 +116,20 @@ export default function NotificationsPopover() {
   }, [])
 
   useEffect(() => {
-    function onNewNotice() {
-      if (!preferences.notice) return
-      load()
+    const bus = getBus()
+    if (!bus) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'notice-updated') {
+        if (preferences.notice) load()
+      }
+      if (data.type === 'notifications-updated') {
+        load()
+      }
     }
-    function onNotificationsUpdated() {
-      // 다른 컴포넌트/탭에서 알림 상태가 바뀌면 다시 불러오기
-      load()
-    }
-    window.addEventListener('app:new-notice', onNewNotice as EventListener)
-    window.addEventListener('app:notifications-updated', onNotificationsUpdated as EventListener)
-    return () => {
-      window.removeEventListener('app:new-notice', onNewNotice as EventListener)
-      window.removeEventListener('app:notifications-updated', onNotificationsUpdated as EventListener)
-    }
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
   }, [load, preferences.notice])
 
   const markAll = useCallback(async () => {
@@ -141,7 +142,8 @@ export default function NotificationsPopover() {
       }
       setItems((prev) => prev.map((item) => ({ ...item, read: true })))
       try {
-        window.dispatchEvent(new CustomEvent('app:notifications-updated'))
+        const { postBus } = await import('@/lib/bus')
+        postBus({ type: 'notifications-updated', payload: {} })
       } catch {}
     } catch (error) {
       console.error('알림 전체 읽음 실패:', error)
@@ -167,7 +169,8 @@ export default function NotificationsPopover() {
           throw new Error(`알림 상태 변경 실패 (${res.status})`)
         }
         try {
-          window.dispatchEvent(new CustomEvent('app:notifications-updated'))
+          const { postBus } = await import('@/lib/bus')
+          postBus({ type: 'notifications-updated', payload: { id } })
         } catch {}
       } catch (error) {
         console.error('알림 읽음 토글 실패:', error)
@@ -188,7 +191,8 @@ export default function NotificationsPopover() {
           throw new Error(`알림 삭제 실패 (${res.status})`)
         }
         try {
-          window.dispatchEvent(new CustomEvent('app:notifications-updated'))
+          const { postBus } = await import('@/lib/bus')
+          postBus({ type: 'notifications-updated', payload: { id } })
         } catch {}
       } catch (error) {
         console.error('알림 삭제 실패:', error)

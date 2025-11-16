@@ -10,6 +10,7 @@ import { getMemberClasses } from '@/app/actions/member-classes'
 import { getMemberTotalRemaining } from '@/app/actions/membership'
 import type { MemberClass } from '@/app/actions/member-classes'
 import { formatInstructorName } from '@/lib/utils/text'
+import { getBus } from '@/lib/bus'
 
 export default function MemberSchedulePage() {
   const today = new Date()
@@ -75,6 +76,37 @@ export default function MemberSchedulePage() {
     }
 
     loadData()
+  }, [profile])
+
+  // Cross-tab sync: class/attendance updates
+  useEffect(() => {
+    const bus = getBus()
+    if (!bus) return
+    const reload = () => {
+      // 간단히 현재 페이지 전체를 새로 데이터 로드
+      if (profile?.id && profile.role === 'member') {
+        // 재호출을 위해 강제로 상태 변경 트리거
+        (async () => {
+          try {
+            const memberId = await getMemberIdByProfileId(profile.id!)
+            if (!memberId) return
+            const memberLessons = await getMemberClasses(memberId)
+            setLessons(memberLessons)
+          } catch (e) {
+            // no-op
+          }
+        })()
+      }
+    }
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'class-updated' || data.type === 'attendance-updated') {
+        reload()
+      }
+    }
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
   }, [profile])
 
   // 레슨이 있는 날짜 추출

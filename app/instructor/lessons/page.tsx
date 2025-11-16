@@ -14,6 +14,7 @@ import { getPaymentTypes } from '@/app/actions/payment-types'
 import { getInstructorMembers } from '@/app/actions/members'
 import { formatInstructorName } from '@/lib/utils/text'
 import { useRouter } from 'next/navigation'
+import { postBus } from '@/lib/bus'
 
 interface Lesson {
   id: string
@@ -375,6 +376,7 @@ export default function InstructorLessonsPage() {
 
       router.refresh()
       await loadLessons()
+      postBus({ type: 'class-updated', payload: { classId: result.data?.id } })
       setShowRegisterModal(false)
       setRegisterForm({
         type: '',
@@ -981,6 +983,7 @@ export default function InstructorLessonsPage() {
                             })
                             router.refresh()
                             await loadLessons()
+                            postBus({ type: 'class-updated', payload: { classId: selectedLesson.id } })
                             closeModal()
                             alert('레슨이 삭제되었습니다.')
                           } catch (error) {

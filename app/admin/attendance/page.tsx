@@ -10,6 +10,7 @@ import { getAllClasses } from '@/app/actions/classes'
 import { formatInstructorName } from '@/lib/utils/text'
 import { useAuth } from '@/lib/auth-context'
 import { addSystemLog } from '@/lib/utils/system-log'
+import { getBus } from '@/lib/bus'
 import { useRouter } from 'next/navigation'
 
 type TabType = 'today' | 'history'
@@ -307,12 +308,18 @@ export default function AdminAttendancePage() {
 
   // 회원/강사 쪽에서 출석 상태가 바뀌면 즉시 동기화 (브라우저 전역 이벤트 수신)
   useEffect(() => {
-    const handler = () => {
-      loadLessons()
-      router.refresh()
+    const bus = getBus()
+    if (!bus) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'attendance-updated' || data.type === 'class-updated') {
+        loadLessons()
+        router.refresh()
+      }
     }
-    window.addEventListener('app:attendance-updated', handler as EventListener)
-    return () => window.removeEventListener('app:attendance-updated', handler as EventListener)
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
   }, [loadLessons, router])
 
   const renderCalendar = () => {

@@ -11,6 +11,7 @@ import { getMemberIdByProfileId } from '@/app/actions/member-data'
 import { getMemberClasses } from '@/app/actions/member-classes'
 import { toggleAttendance } from '@/lib/actions/attendance-actions'
 import { addSystemLog } from '@/lib/utils/system-log'
+import { postBus } from '@/lib/bus'
 
 type LessonInfo = {
   classId: string
@@ -236,14 +237,8 @@ export default function MemberAttendancePage() {
         })
 
         // 다른 화면(강사/관리자 출석 화면 등) 즉시 반영을 위한 브로드캐스트
-        try {
-          const evt = new CustomEvent('app:attendance-updated', {
-            detail: { classId: lesson.classId, newStatus },
-          })
-          window.dispatchEvent(evt)
-        } catch {
-          // no-op
-        }
+        // Cross-tab/page sync
+        postBus({ type: 'attendance-updated', payload: { classId: lesson.classId, newStatus } })
 
         await loadTodayLessons()
       } catch (error) {

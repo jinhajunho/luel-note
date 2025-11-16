@@ -10,6 +10,7 @@ import {
 } from '@/app/actions/notification-preferences'
 import { usePathname, useRouter } from 'next/navigation'
 import { addSystemLog } from '@/lib/utils/system-log'
+import { postBus } from '@/lib/bus'
 import { updateEmail } from '@/app/actions/profile'
 
 type MenuKey = 'notices' | 'profile' | 'notifications'
@@ -180,13 +181,7 @@ export default function ProfileMenuPopover() {
         action: '공지사항 등록',
         details: `제목: ${title}. 공지사항이 등록되었습니다.`
       })
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('app:new-notice', {
-            detail: { title },
-          })
-        )
-      }
+      postBus({ type: 'notice-updated', payload: {} })
     } catch (error) {
       console.error('공지 저장 실패:', error)
       alert('공지사항을 저장하는 중 문제가 발생했습니다.')
@@ -215,6 +210,7 @@ export default function ProfileMenuPopover() {
         action: '공지사항 삭제',
         details: `공지 ID: ${id}. 공지사항이 삭제되었습니다.`
       })
+      postBus({ type: 'notice-updated', payload: { id } })
     } catch (error) {
       console.error('공지 삭제 실패:', error)
       alert('공지사항을 삭제하는 중 문제가 발생했습니다.')
