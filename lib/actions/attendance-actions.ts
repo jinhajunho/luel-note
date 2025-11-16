@@ -41,6 +41,19 @@ type ToggleAttendanceOptions = {
   actor?: 'member' | 'instructor' | 'admin'
 }
 
+// DB의 date(Date), time(Time) 컬럼을 UTC 기준 하나의 Date로 결합
+function combineDateAndTimeUTC(dateValue: Date | null, timeValue: Date | null): Date | null {
+  if (!dateValue || !timeValue) return null
+  const y = dateValue.getUTCFullYear()
+  const m = dateValue.getUTCMonth() // 0-based
+  const d = dateValue.getUTCDate()
+  const h = timeValue.getUTCHours()
+  const min = timeValue.getUTCMinutes()
+  const s = timeValue.getUTCSeconds()
+  const ms = Date.UTC(y, m, d, h, min, s, 0)
+  return new Date(ms)
+}
+
 function parseLocalDateTime(dateStr?: string | null, timeStr?: string | null): Date | null {
   if (!dateStr || !timeStr) return null
   const [year, month, day] = dateStr.split('-').map(Number)
@@ -118,14 +131,12 @@ export async function toggleAttendance(
     }
 
     if (actor === 'member') {
-      const dateStr = getDateString(classData.date)
-      const startStr = getTimeString(classData.startTime)
-      const endStr = getTimeString(classData.endTime)
-
-      const startDateTime = parseLocalDateTime(dateStr, startStr)
-      let endDateTime = parseLocalDateTime(dateStr, endStr)
-
+      // 서버 타임존(UTC)과 한국 현지시각 간 불일치를 방지하기 위해
+      // DB의 date(Timezone 없는 DATE) + time(Time)을 UTC 기준으로 결합해 비교한다.
+      const startDateTime = combineDateAndTimeUTC(classData.date, classData.startTime)
+      let endDateTime = combineDateAndTimeUTC(classData.date, classData.endTime)
       if (startDateTime && endDateTime && endDateTime.getTime() <= startDateTime.getTime()) {
+        // 자정을 넘어가는 경우 다음날로 이동
         endDateTime = new Date(endDateTime.getTime() + 24 * 60 * 60 * 1000)
       }
 
