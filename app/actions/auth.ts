@@ -112,36 +112,38 @@ async function ensureProfile({
     return existingProfile.role ?? 'guest'
   }
 
+  if (!normalizedPhone) {
+    throw new Error('전화번호 정보가 없어 프로필을 생성할 수 없습니다.')
+  }
+
   await prisma.$transaction(async (tx) => {
     const newProfile = await tx.profile.create({
       data: {
         authId,
-        phone: normalizedPhone || null,
+        phone: normalizedPhone,
         name: fallbackName,
         role: 'guest',
       },
       select: { id: true },
     })
 
-    if (normalizedPhone) {
-      await tx.member.upsert({
-        where: { phone: normalizedPhone },
-        update: {
-          profileId: newProfile.id,
-          phone: normalizedPhone,
-          name: fallbackName,
-          status: 'active',
-        },
-        create: {
-          profileId: newProfile.id,
-          phone: normalizedPhone,
-          name: fallbackName,
-          type: 'guest',
-          status: 'active',
-          joinDate: new Date(),
-        },
-      })
-    }
+    await tx.member.upsert({
+      where: { phone: normalizedPhone },
+      update: {
+        profileId: newProfile.id,
+        phone: normalizedPhone,
+        name: fallbackName,
+        status: 'active',
+      },
+      create: {
+        profileId: newProfile.id,
+        phone: normalizedPhone,
+        name: fallbackName,
+        type: 'guest',
+        status: 'active',
+        joinDate: new Date(),
+      },
+    })
   })
 
   return 'guest'
