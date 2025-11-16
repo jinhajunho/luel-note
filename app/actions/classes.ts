@@ -282,7 +282,8 @@ export async function createClass(input: CreateClassInput): Promise<{
           } else {
             const profile = await tx.profile.create({
               data: {
-                authId: `guest-${randomUUID()}`,
+                // authId는 UUID 컬럼이므로 순수 UUID로 저장
+                authId: randomUUID(),
                 phone: normalizedPhone,
                 name: displayName,
                 // 프로필 테이블은 'guest'를 허용하지 않는 환경이 있어 'member'로 생성
