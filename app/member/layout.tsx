@@ -8,6 +8,8 @@ import ProfileMenuPopover from '@/components/common/ProfileMenuPopover'
 import BottomNavigation from '@/components/common/BottomNavigation'
 import { getMemberIdByProfileId } from '@/app/actions/member-data'
 import { checkMemberHasMembership } from '@/app/actions/membership'
+import { useEffect as ReactUseEffect } from 'react'
+import { getBus } from '@/lib/bus'
 
 export default function MemberLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -78,6 +80,37 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
 
     checkMembership()
   }, [profile?.id, profile?.role, authLoading])
+
+  // 글로벌 동기화 리스너 + 백업 폴링
+  useEffect(() => {
+    const bus = getBus()
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (
+        data.type === 'notifications-updated' ||
+        data.type === 'notice-updated' ||
+        data.type === 'class-updated' ||
+        data.type === 'attendance-updated'
+      ) {
+        try {
+          router.refresh()
+        } catch {}
+      }
+    }
+    if (bus) {
+      bus.addEventListener('message', onMessage as EventListener)
+    }
+    const interval = setInterval(() => {
+      try {
+        router.refresh()
+      } catch {}
+    }, 15000)
+    return () => {
+      if (bus) bus.removeEventListener('message', onMessage as EventListener)
+      clearInterval(interval)
+    }
+  }, [router])
 
   // 프로필 로딩 중이면 로딩 화면
   if (authLoading) {

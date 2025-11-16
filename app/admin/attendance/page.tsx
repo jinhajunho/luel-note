@@ -213,6 +213,10 @@ export default function AdminAttendancePage() {
         // 즉시 반영
         router.refresh()
         await loadLessons()
+        try {
+          const { postBus } = await import('@/lib/bus')
+          postBus({ type: 'attendance-updated', payload: { classId: lessonId } })
+        } catch {}
       } catch (err) {
         console.error('출석 처리 실패:', err)
         alert('출석 처리 중 오류가 발생했습니다.')
@@ -248,6 +252,10 @@ export default function AdminAttendancePage() {
         closeModal()
         router.refresh()
         await loadLessons()
+        try {
+          const { postBus } = await import('@/lib/bus')
+          postBus({ type: 'attendance-updated', payload: { classId: lessonId } })
+        } catch {}
       } catch (err) {
         console.error('레슨 완료 처리 실패:', err)
         alert('레슨 완료 처리 중 오류가 발생했습니다.')
@@ -290,6 +298,10 @@ export default function AdminAttendancePage() {
         closeModal()
         router.refresh()
         await loadLessons()
+        try {
+          const { postBus } = await import('@/lib/bus')
+          postBus({ type: 'attendance-updated', payload: { classId: lessonId } })
+        } catch {}
       } catch (err) {
         console.error('레슨 취소 처리 실패:', err)
         alert('레슨 취소 처리 중 오류가 발생했습니다.')

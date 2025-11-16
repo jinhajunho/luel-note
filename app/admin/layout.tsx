@@ -6,6 +6,8 @@ import NotificationsPopover from '@/components/common/NotificationsPopover'
 import ProfileMenuPopover from '@/components/common/ProfileMenuPopover'
 import BottomNavigation from '@/components/common/BottomNavigation'
 import { getNavItemsByRole } from '@/lib/navigation'
+import { useEffect } from 'react'
+import { getBus } from '@/lib/bus'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -18,6 +20,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const currentLabel = isAdminView ? '관리자' : '강사'
   const targetPath = isAdminView ? '/instructor/members' : '/admin/schedule'
   const targetLabel = isAdminView ? '강사 화면으로 전환' : '관리자 화면으로 전환'
+
+  // 글로벌 동기화 리스너 + 백업 폴링
+  useEffect(() => {
+    const bus = getBus()
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (
+        data.type === 'notifications-updated' ||
+        data.type === 'notice-updated' ||
+        data.type === 'class-updated' ||
+        data.type === 'attendance-updated'
+      ) {
+        try {
+          router.refresh()
+        } catch {}
+      }
+    }
+    if (bus) {
+      bus.addEventListener('message', onMessage as EventListener)
+    }
+    const interval = setInterval(() => {
+      try {
+        router.refresh()
+      } catch {}
+    }, 15000)
+    return () => {
+      if (bus) bus.removeEventListener('message', onMessage as EventListener)
+      clearInterval(interval)
+    }
+  }, [router])
 
   return (
     <div className="min-h-screen bg-[#f5f1e8] pb-24">

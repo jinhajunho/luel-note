@@ -208,6 +208,11 @@ export default function InstructorAttendancePage() {
         }
         router.refresh()
         await loadLessons()
+        // cross-tab sync
+        try {
+          const { postBus } = await import('@/lib/bus')
+          postBus({ type: 'attendance-updated', payload: { classId: lessonId } })
+        } catch {}
       } catch (err) {
         console.error('출석 처리 실패:', err)
         alert('출석 처리 중 오류가 발생했습니다.')
@@ -243,6 +248,10 @@ export default function InstructorAttendancePage() {
         closeModal()
         router.refresh()
         await loadLessons()
+        try {
+          const { postBus } = await import('@/lib/bus')
+          postBus({ type: 'attendance-updated', payload: { classId: lessonId } })
+        } catch {}
       } catch (err) {
         console.error('레슨 완료 처리 실패:', err)
         alert('레슨 완료 처리 중 오류가 발생했습니다.')
@@ -285,6 +294,10 @@ export default function InstructorAttendancePage() {
         closeModal()
         router.refresh()
         await loadLessons()
+        try {
+          const { postBus } = await import('@/lib/bus')
+          postBus({ type: 'attendance-updated', payload: { classId: lessonId } })
+        } catch {}
       } catch (err) {
         console.error('레슨 취소 처리 실패:', err)
         alert('레슨 취소 처리 중 오류가 발생했습니다.')
