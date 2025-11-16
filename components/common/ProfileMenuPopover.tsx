@@ -89,20 +89,7 @@ export default function ProfileMenuPopover() {
     }
   }, [])
 
-  // 다른 탭에서 공지 변경 시 즉시 재조회
-  useEffect(() => {
-    const bus = getBus()
-    if (!bus) return
-    const onMessage = (e: MessageEvent) => {
-      const data = e.data
-      if (!data || typeof data !== 'object') return
-      if (data.type === 'notice-updated') {
-        fetchNotices()
-      }
-    }
-    bus.addEventListener('message', onMessage as EventListener)
-    return () => bus.removeEventListener('message', onMessage as EventListener)
-  }, [fetchNotices])
+  
 
   useEffect(() => {
     const nextEmail = user?.email ?? ''
@@ -164,6 +151,21 @@ export default function ProfileMenuPopover() {
 
   useEffect(() => {
     fetchNotices()
+  }, [fetchNotices])
+
+  // 다른 탭에서 공지 변경 시 즉시 재조회 (fetchNotices 선언 후 배치)
+  useEffect(() => {
+    const bus = getBus()
+    if (!bus) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'notice-updated') {
+        fetchNotices()
+      }
+    }
+    bus.addEventListener('message', onMessage as EventListener)
+    return () => bus.removeEventListener('message', onMessage as EventListener)
   }, [fetchNotices])
 
   const handleCreateNotice = async (e: React.FormEvent<HTMLFormElement>) => {
