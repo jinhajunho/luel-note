@@ -355,11 +355,13 @@ export async function resetMemberPassword(memberPhone: string): Promise<ResetPas
     if (profile?.authId) {
       authId = profile.authId
     } else {
-      const { data, error } = await supabaseAdminClient.auth.admin.getUserByEmail(email)
-      if (error) {
-        throw error
+      // Supabase Admin SDK는 이메일로 사용자를 직접 조회하는 메서드를 제공하지 않음
+      // 기존 데이터에 authId가 없는 경우에는 비밀번호 초기화를 진행할 수 없도록 안내
+      return {
+        success: false,
+        error:
+          '이 계정은 인증 사용자 ID(authId)가 연결되어 있지 않습니다. 먼저 로그인 후 프로필 동기화를 진행해 주세요.',
       }
-      authId = data.user?.id ?? null
     }
 
     if (!authId) {
