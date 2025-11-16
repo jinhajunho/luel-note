@@ -8,6 +8,7 @@ import {
   getNotificationPreferences as fetchNotificationPrefs,
   updateNotificationPreferences as persistNotificationPrefs,
 } from '@/app/actions/notification-preferences'
+import { updateEmail as updateContactEmail } from '@/app/actions/profile'
 
 // ==================== 타입 정의 ====================
 type UserProfile = {
@@ -158,16 +159,33 @@ export default function ProfilePage() {
       return
     }
 
-    // 데이터 업데이트
-    if (profile) {
-      setProfile({
-        ...profile,
-        ...form
-      })
+    try {
+      // 연락용 이메일 변경 처리 (로그인 이메일과 무관, user_metadata.contact_email 업데이트)
+      if (profile && form.email !== profile.email) {
+        const res = await updateContactEmail(form.email)
+        if (!res.success) {
+          alert(res.error)
+          return
+        }
+      }
+
+      // 클라이언트 상태 업데이트
+      if (profile) {
+        setProfile({
+          ...profile,
+          name: form.name,
+          phone: form.phone,
+          email: form.email,
+        })
+      }
+      setHasChanges(false)
+      await refreshProfile()
+      alert('프로필이 수정되었습니다')
+      router.back()
+    } catch (e) {
+      console.error('프로필 저장 실패:', e)
+      alert('프로필 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
     }
-    setHasChanges(false)
-    alert('프로필이 수정되었습니다')
-    router.back()
   }
 
   // 취소
