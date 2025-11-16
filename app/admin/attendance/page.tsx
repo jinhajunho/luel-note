@@ -224,7 +224,7 @@ export default function AdminAttendancePage() {
         setActionLoading(false)
       }
     },
-    [lessons, loadLessons, actionLoading]
+    [lessons, loadLessons, actionLoading, router]
   )
 
   const handleCompleteLesson = useCallback(
@@ -263,7 +263,7 @@ export default function AdminAttendancePage() {
         setActionLoading(false)
       }
     },
-    [loadLessons, actionLoading, lessons, profile?.name]
+    [loadLessons, actionLoading, lessons, profile?.name, router]
   )
 
   const handleCancelLesson = useCallback(

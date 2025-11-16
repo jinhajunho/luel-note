@@ -259,7 +259,7 @@ export default function InstructorAttendancePage() {
         setActionLoading(false)
       }
     },
-    [loadLessons, actionLoading, lessons, instructorName, profile?.name]
+    [loadLessons, actionLoading, lessons, instructorName, profile?.name, router]
   )
 
   const handleCancelLesson = useCallback(
