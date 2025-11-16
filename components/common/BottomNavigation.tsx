@@ -20,7 +20,10 @@ export default function BottomNavigation({ items }: BottomNavigationProps) {
   const menuItems = items ?? (profile ? getNavItemsByRole(profile.role) : [])
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#f0ebe1] z-40">
+    <nav
+      className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#f0ebe1] z-40"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       <div className="mx-auto flex h-16 max-w-2xl items-center justify-around px-2 relative">
         {menuItems.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
@@ -35,7 +38,8 @@ export default function BottomNavigation({ items }: BottomNavigationProps) {
                 style={{
                   background: isActive
                     ? 'linear-gradient(135deg,#3b82f6 0%,#2563eb 50%,#1d4ed8 100%)'
-                    : 'linear-gradient(135deg,#38bdf8 0%,#2563eb 50%,#7c3aed 100%)'
+                    : 'linear-gradient(135deg,#38bdf8 0%,#2563eb 50%,#7c3aed 100%)',
+                  bottom: 'calc(env(safe-area-inset-bottom))'
                 }}
                 aria-label={item.label}
                 aria-current={isActive ? 'page' : undefined}

@@ -970,7 +970,7 @@ export default function InstructorLessonsPage() {
                 <>
                   <div className="flex items-center gap-2 mb-3">
                     <LessonTypeBadge type={selectedLesson.type} />
-                    <span className="text-sm text-[#7a6f61]">강사: {instructorName}</span>
+                    <span className="text-sm text-[#7a6f61]">{instructorName}</span>
                   </div>
 
                   {selectedLesson.members.length > 0 ? (

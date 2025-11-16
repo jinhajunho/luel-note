@@ -14,7 +14,9 @@ export const metadata: Metadata = {
       { url: '/favicon.ico' },
       { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-      { url: '/icons/icon-192.png', rel: 'apple-touch-icon' as any },
+    ],
+    apple: [
+      { url: '/icons/icon-192.png' },
     ],
   },
 }
@@ -28,6 +30,7 @@ export default function RootLayout({
     <html lang="ko">
       <body className={inter.className}>
         <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#2563eb" />
         <AuthProvider>
           <ServiceWorkerRegister />

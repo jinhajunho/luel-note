@@ -62,9 +62,9 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
   }, [router])
 
   return (
-    <div className="min-h-screen bg-[#f5f1e8] pb-24">
+    <div className="h-[100dvh] overflow-hidden flex flex-col bg-[#f5f1e8]">
       {/* Header (same style as member) */}
-      <header className="bg-white border-b border-[#f0ebe1] px-5 h-[50px] sticky top-0 z-50 shadow-sm">
+      <header className="bg-white border-b border-[#f0ebe1] px-5 h-[50px] sticky top-0 z-50 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-2xl mx-auto h-full flex items-center justify-between">
           <h1 className="font-sans text-xl leading-none tracking-tight font-extrabold text-[#9BCDE8]">LUEL NOTE</h1>
           <div className="flex items-center gap-2">
@@ -88,7 +88,7 @@ export default function InstructorLayout({ children }: { children: React.ReactNo
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto w-full overflow-x-hidden">{children}</main>
+      <main className="max-w-2xl mx-auto w-full overflow-x-hidden flex-1 overflow-y-auto pb-24" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 96px)' }}>{children}</main>
 
       <BottomNavigation items={getNavItemsByRole('instructor')} />
     </div>

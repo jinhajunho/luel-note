@@ -189,9 +189,9 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
   console.log('✅ 페이지 렌더링:', { hasMembership, checkingMembership, role: profile?.role })
 
   return (
-    <div className="min-h-screen bg-[#f5f1e8] pb-24">
+    <div className="h-[100dvh] overflow-hidden flex flex-col bg-[#f5f1e8]">
       {/* Header (member schedule style) */}
-      <header className="bg-white border-b border-[#f0ebe1] px-5 h-[50px] sticky top-0 z-50">
+      <header className="bg-white border-b border-[#f0ebe1] px-5 h-[50px] sticky top-0 z-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-2xl mx-auto h-full flex items-center justify-between">
           <h1 className="font-sans text-xl leading-none tracking-tight font-extrabold text-[#9BCDE8]">LUEL NOTE</h1>
           <div className="flex items-center gap-2">
@@ -211,7 +211,7 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto w-full">{children}</main>
+      <main className="max-w-2xl mx-auto w-full flex-1 overflow-auto pb-24" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 96px)' }}>{children}</main>
 
       <BottomNavigation />
     </div>
