@@ -42,7 +42,7 @@ type ToggleAttendanceOptions = {
 }
 
 // DB의 date(Date), time(Time) 컬럼을 UTC 기준 하나의 Date로 결합
-function combineDateAndTimeUTC(dateValue: Date | null, timeValue: Date | null): Date | null {
+function combineDateAndTimeKST(dateValue: Date | null, timeValue: Date | null): Date | null {
   if (!dateValue || !timeValue) return null
   const y = dateValue.getUTCFullYear()
   const m = dateValue.getUTCMonth() // 0-based
@@ -50,7 +50,9 @@ function combineDateAndTimeUTC(dateValue: Date | null, timeValue: Date | null): 
   const h = timeValue.getUTCHours()
   const min = timeValue.getUTCMinutes()
   const s = timeValue.getUTCSeconds()
-  const ms = Date.UTC(y, m, d, h, min, s, 0)
+  // KST(UTC+9) 기준의 로컬 시각을 실제 UTC 타임스탬프로 변환
+  // 예) KST 19:00 → UTC 10:00 (= h - 9)
+  const ms = Date.UTC(y, m, d, h - 9, min, s, 0)
   return new Date(ms)
 }
 
@@ -133,8 +135,8 @@ export async function toggleAttendance(
     if (actor === 'member') {
       // 서버 타임존(UTC)과 한국 현지시각 간 불일치를 방지하기 위해
       // DB의 date(Timezone 없는 DATE) + time(Time)을 UTC 기준으로 결합해 비교한다.
-      const startDateTime = combineDateAndTimeUTC(classData.date, classData.startTime)
-      let endDateTime = combineDateAndTimeUTC(classData.date, classData.endTime)
+      const startDateTime = combineDateAndTimeKST(classData.date, classData.startTime)
+      let endDateTime = combineDateAndTimeKST(classData.date, classData.endTime)
       if (startDateTime && endDateTime && endDateTime.getTime() <= startDateTime.getTime()) {
         // 자정을 넘어가는 경우 다음날로 이동
         endDateTime = new Date(endDateTime.getTime() + 24 * 60 * 60 * 1000)
